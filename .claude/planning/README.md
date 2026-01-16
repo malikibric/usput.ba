@@ -117,6 +117,7 @@ Architecture Decision Records (ADR) - dokumentovane ključne odluke.
 |-------|--------|--------|------|
 | 2025-01-15 | DSL-First Architecture | ✅ Accepted | `decisions/2025-01-15-dsl-first-architecture.md` |
 | 2025-01-15 | Implementation Decisions | ✅ Accepted | `decisions/2025-01-15-implementation-decisions.md` |
+| 2026-01-16 | Executor Simplification | ✅ Accepted | `decisions/ADR-2026-01-16-executor-simplification.md` |
 | 2025-01-15 | Full Introspection in P0 | ✅ Accepted | `decisions/2025-01-15-full-introspection-p0.md` |
 
 ### Ključne odluke
@@ -164,15 +165,27 @@ Architecture Decision Records (ADR) - dokumentovane ključne odluke.
 
 ## Trenutno stanje
 
-**Aktivna faza:** Faza 1 - Core + DSL Foundation
+**Kompletne faze:**
+- ✅ Faza 1: Core + DSL Foundation
+- ✅ Faza 2: Knowledge Layer 0 (Stats)
+- ✅ Faza 3: Knowledge Layer 1 (Summaries)
+- ✅ Faza 4: Knowledge Layer 2 (Clusters + pgvector)
 
-**Fokus:**
-- `bin/platform` CLI
-- `Platform::Brain` (RubyLLM wrapper + DSL generation)
-- `Platform::Conversation`
-- `Platform::DSL::Parser` - DSL parsing
-- `Platform::DSL::Executor` - Query execution
+**Sljedeća faza:** Faza 5 - External Data Integration (Geoapify)
+
+**Implementirane DSL komande:**
+```
+schema | stats                              # Layer 0 statistike
+schema | health                             # System health
+summaries | list                            # Lista AI summaries
+summaries { city: "Mostar" } | show         # Prikaz summary-ja
+summaries | issues                          # Problemi u podacima
+clusters | list                             # Lista clusters
+clusters { id: "ottoman-heritage" } | show  # Prikaz cluster-a
+clusters | semantic "traditional food"      # Semantic search (pgvector)
+locations { city: "X" } | sample 10         # Raw record queries
+```
 
 **Arhitektura:** DSL-First (ADR: 2025-01-15)
 
-**Referenca:** `IMPLEMENTATION.md` → Faza 1
+**Referenca:** `IMPLEMENTATION.md` → Faza 5

@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 module Ai
+  # @deprecated Use Platform DSL instead: bin/platform chat
+  #   This service will be removed in a future release.
+  #   Use DSL: locations { id: X } | generate { style: "detailed" }
+  #
   # Obogaćuje lokaciju sa AI-generisanim sadržajem
   # Koristi postojeća polja Location modela bez migracija
   class LocationEnricher
@@ -97,7 +101,8 @@ module Ai
         budget: determine_budget(place_data),
         website: normalize_website_url(place_data[:website]),
         phone: sanitized_phone,
-        email: sanitized_email
+        email: sanitized_email,
+        ai_generated: true
       )
 
       # Save location first so it has an ID for translations

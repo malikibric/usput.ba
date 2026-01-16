@@ -52,6 +52,18 @@ gem "rubyzip", require: "zip"
 # AI/LLM integration for experience generation [https://github.com/crmne/ruby_llm]
 gem "ruby_llm"
 
+# OpenAI API client for embeddings [https://github.com/alexrudall/ruby-openai]
+gem "ruby-openai"
+
+# CLI framework for Platform [https://github.com/rails/thor]
+gem "thor"
+
+# PEG parser for Platform DSL [https://github.com/kschiess/parslet]
+gem "parslet"
+
+# Vector similarity search with pgvector [https://github.com/ankane/neighbor]
+gem "neighbor"
+
 # HTTP client for Geoapify API
 gem "faraday"
 gem "faraday-follow_redirects"  # Follow HTTP redirects for image downloads
@@ -84,6 +96,10 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+
+  # ERB linting [https://github.com/Shopify/erb-lint]
+  gem "erb_lint", require: false
+  gem "better_html", require: false
 end
 
 group :development do
@@ -98,6 +114,16 @@ group :test do
 
   # Pin minitest to 5.x - version 6.0 has breaking changes incompatible with Rails 8.1
   gem "minitest", "~> 5.25"
+
+  # Test coverage
+  gem "simplecov", require: false
+  gem "simplecov-lcov", require: false
+end
+
+# CI-only gems (require system dependencies like cmake, libgit2)
+group :ci do
+  # Coverage enforcement on PRs - requires cmake and libgit2-dev
+  gem "undercover"
 end
 
 gem "tailwindcss-rails", "~> 4.0"
