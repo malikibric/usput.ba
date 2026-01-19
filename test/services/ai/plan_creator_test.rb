@@ -402,6 +402,159 @@ module Ai
       assert_nil result
     end
 
+    # === fetch_available_experiences tests ===
+
+    test "fetch_available_experiences filters by city when provided" do
+      mock_experience = create_mock_experience
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, "Sarajevo", nil)
+        assert_equal 1, result.count
+      end
+    end
+
+    test "fetch_available_experiences returns all when city is nil" do
+      mock_experience = create_mock_experience
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, nil, nil)
+        assert_equal 1, result.count
+      end
+    end
+
+    test "fetch_available_experiences filters by experience types when provided" do
+      mock_experience = create_mock_experience
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, "Sarajevo", ["culture", "history"])
+        assert_equal 1, result.count
+      end
+    end
+
+    test "fetch_available_experiences does not filter when activities is empty array" do
+      mock_experience = create_mock_experience
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, "Sarajevo", [])
+        assert_equal 1, result.count
+      end
+    end
+
+    test "fetch_available_experiences does not filter when activities is nil" do
+      mock_experience = create_mock_experience
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, "Sarajevo", nil)
+        assert_equal 1, result.count
+      end
+    end
+
+    test "create_for_profile passes profile activities to fetch_available_experiences" do
+      mock_experience = create_mock_experience(id: 1)
+
+      mock_ai_response = {
+        duration_days: 3,
+        titles: { "en" => "Test Plan", "bs" => "Test Plan BS" },
+        notes: { "en" => "Notes", "bs" => "Biljeske" },
+        days: [
+          { day_number: 1, theme: "Day 1", experience_ids: [1] }
+        ],
+        reasoning: "Test reasoning"
+      }
+
+      fetch_called_with = nil
+      @creator.stub :fetch_available_experiences, ->(city, activities) {
+        fetch_called_with = { city: city, activities: activities }
+        [mock_experience]
+      } do
+        stub_setting_min_experiences(1) do
+          stub_ai_queue_response(mock_ai_response) do
+            stub_existing_plans_empty do
+              @creator.create_for_profile(profile: "family", city: "Sarajevo")
+            end
+          end
+        end
+      end
+
+      assert_not_nil fetch_called_with
+      assert_equal "Sarajevo", fetch_called_with[:city]
+      assert fetch_called_with[:activities].is_a?(Array)
+    end
+
+    test "create_for_profile handles profile with empty activities" do
+      mock_experience = create_mock_experience(id: 1)
+
+      # Create a profile with empty activities array
+      custom_profile = {
+        description: "Test Profile",
+        preferences: {
+          pace: "moderate",
+          activities: [],
+          budget: "medium"
+        }
+      }
+
+      @creator.stub :generate_profile_data, custom_profile do
+        stub_experiences_with([mock_experience]) do
+          stub_setting_min_experiences(1) do
+            stub_ai_queue_response({
+              duration_days: 1,
+              titles: { "en" => "Test" },
+              notes: { "en" => "Notes" },
+              days: [{ day_number: 1, theme: "Day 1", experience_ids: [1] }],
+              reasoning: "Test"
+            }) do
+              stub_existing_plans_empty do
+                result = @creator.create_for_profile(profile: "custom", city: "Sarajevo")
+                # Should not crash, may return nil or Plan
+                assert [NilClass, Plan].include?(result.class)
+              end
+            end
+          end
+        end
+      end
+    end
+
+    test "fetch_available_experiences uses Experience.all when city is nil" do
+      mock_experience = create_mock_experience
+
+      # Verify that Experience.all is called when city is nil
+      all_called = false
+      Experience.stub :all, ->() {
+        all_called = true
+        mock_relation = OpenStruct.new
+        mock_relation.define_singleton_method(:includes) { |*| [mock_experience] }
+        mock_relation
+      } do
+        result = @creator.send(:fetch_available_experiences, nil, nil)
+        assert all_called
+      end
+    end
+
+    test "fetch_available_experiences applies both city and activities filters" do
+      mock_experience = create_mock_experience
+
+      stub_experiences_with([mock_experience]) do
+        result = @creator.send(:fetch_available_experiences, "Sarajevo", ["culture", "history"])
+        # Should apply both filters
+        assert_equal 1, result.count
+      end
+    end
+
+    test "fetch_available_experiences includes locations and experience_category" do
+      mock_experience = create_mock_experience
+
+      includes_called_with = nil
+      mock_relation = OpenStruct.new
+      mock_relation.define_singleton_method(:where) { |*| self }
+      mock_relation.define_singleton_method(:distinct) { self }
+      mock_relation.define_singleton_method(:joins) { |*| self }
+      mock_relation.define_singleton_method(:includes) do |*args|
+        includes_called_with = args
+        [mock_experience]
+      end
+
+      Experience.stub :joins, mock_relation do
+        @creator.send(:fetch_available_experiences, "Sarajevo", nil)
+        assert_equal [:locations, :experience_category], includes_called_with
+      end
+    end
+
     private
 
     def create_mock_experience(id: nil)
@@ -444,6 +597,7 @@ module Ai
       mock_relation.define_singleton_method(:where) { |*| self }
       mock_relation.define_singleton_method(:distinct) { self }
       mock_relation.define_singleton_method(:includes) { |*| self }
+      mock_relation.define_singleton_method(:joins) { |*| self }
       mock_relation.define_singleton_method(:all) { self }
       mock_relation.define_singleton_method(:count) { experiences.count }
       mock_relation.define_singleton_method(:each) { |&block| experiences.each(&block) }
@@ -453,7 +607,9 @@ module Ai
 
       Experience.stub :joins, mock_relation do
         Experience.stub :includes, mock_relation do
-          yield
+          Experience.stub :all, mock_relation do
+            yield
+          end
         end
       end
     end

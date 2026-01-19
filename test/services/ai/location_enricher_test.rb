@@ -497,6 +497,254 @@ module Ai
       assert_equal ["culture", "history"], mock_location.suitable_experiences
     end
 
+    test "apply_enrichment uses classifier with hints when available" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: ["culture", "history"],
+        tags: [],
+        practical_info: {}
+      }
+
+      classifier_called = false
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        classifier_called = true
+        assert_equal ["culture", "history"], hints
+        { success: true, types: ["culture", "history", "architecture"] }
+      end
+
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+
+      assert classifier_called
+    end
+
+    test "apply_enrichment falls back to hints when classifier fails" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+      types_added = []
+      mock_location.define_singleton_method(:add_experience_type) { |type| types_added << type }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: ["culture", "history"],
+        tags: [],
+        practical_info: {}
+      }
+
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        { success: false, error: "Classification failed" }
+      end
+
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+
+      assert_equal ["culture", "history"], mock_location.suitable_experiences
+      assert_includes types_added, "culture"
+      assert_includes types_added, "history"
+    end
+
+    test "apply_enrichment falls back to hints when classifier raises exception" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+      types_added = []
+      mock_location.define_singleton_method(:add_experience_type) { |type| types_added << type }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: ["culture"],
+        tags: [],
+        practical_info: {}
+      }
+
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        raise StandardError, "Classifier error"
+      end
+
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+
+      assert_equal ["culture"], mock_location.suitable_experiences
+      assert_includes types_added, "culture"
+    end
+
+    test "apply_enrichment handles no hints gracefully" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: [],
+        tags: [],
+        practical_info: {}
+      }
+
+      classifier_called = false
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        classifier_called = true
+        assert_nil hints
+        { success: true, types: ["nature"] }
+      end
+
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+
+      assert classifier_called
+    end
+
+    test "apply_enrichment falls back to hints when add_experience_type fails" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+
+      # Make add_experience_type fail
+      mock_location.define_singleton_method(:add_experience_type) { |type| raise "Failed" }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: ["culture"],
+        tags: [],
+        practical_info: {}
+      }
+
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        { success: false, error: "Classification failed" }
+      end
+
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          # Should not raise exception
+          assert_nothing_raised do
+            @enricher.send(:apply_enrichment, mock_location, enrichment)
+          end
+        end
+      end
+
+      assert_equal ["culture"], mock_location.suitable_experiences
+    end
+
+    test "apply_enrichment handles nil suitable_experiences" do
+      mock_location = create_mock_location
+      mock_location.define_singleton_method(:set_translation) { |*| }
+
+      enrichment = {
+        descriptions: {},
+        historical_context: {},
+        suitable_experiences: nil,
+        tags: [],
+        practical_info: {}
+      }
+
+      # Should not crash when suitable_experiences is nil
+      assert_nothing_raised do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+    end
+
+    test "generate_enrichment returns empty hash when AI request fails" do
+      mock_location = create_mock_location
+
+      Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
+        Locale.stub :ai_supported_codes, [] do
+          result = @enricher.send(:generate_enrichment, mock_location, {})
+          # Should return the initial combined_result even if metadata fails
+          assert result.is_a?(Hash)
+          assert result.key?(:suitable_experiences)
+          assert result.key?(:descriptions)
+          assert result.key?(:historical_context)
+        end
+      end
+    end
+
+    test "generate_metadata returns empty hash on RequestError" do
+      mock_location = create_mock_location
+
+      Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
+        result = @enricher.send(:generate_metadata, mock_location, {})
+        assert_equal({}, result)
+      end
+    end
+
+    test "generate_descriptions returns empty hash on RequestError" do
+      mock_location = create_mock_location
+
+      Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
+        result = @enricher.send(:generate_descriptions, mock_location, {}, ["en"])
+        assert_equal({}, result)
+      end
+    end
+
+    test "generate_historical_context returns empty hash on RequestError" do
+      mock_location = create_mock_location
+
+      Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
+        result = @enricher.send(:generate_historical_context, mock_location, {}, ["en"])
+        assert_equal({}, result)
+      end
+    end
+
+    test "generate_enrichment merges results when metadata present" do
+      mock_location = create_mock_location
+
+      metadata_response = {
+        suitable_experiences: ["culture"],
+        tags: ["historical"],
+        practical_info: { duration_minutes: 60 }
+      }
+
+      call_count = 0
+      Ai::OpenaiQueue.stub :request, ->(*) {
+        call_count += 1
+        if call_count == 1
+          metadata_response
+        else
+          { descriptions: { "en" => "Test" }, historical_context: { "en" => "History" } }
+        end
+      } do
+        Locale.stub :ai_supported_codes, ["en"] do
+          result = @enricher.send(:generate_enrichment, mock_location, {})
+
+          assert_includes result[:suitable_experiences], "culture"
+          assert_includes result[:tags], "historical"
+          assert_equal 60, result[:practical_info][:duration_minutes]
+        end
+      end
+    end
+
+    test "generate_descriptions returns empty hash when result has no descriptions" do
+      mock_location = create_mock_location
+
+      Ai::OpenaiQueue.stub :request, { other_field: "value" } do
+        result = @enricher.send(:generate_descriptions, mock_location, {}, ["en"])
+        assert_equal({}, result)
+      end
+    end
+
     test "apply_enrichment merges tags" do
       mock_location = create_mock_location
       mock_location.instance_variable_set(:@tags, ["existing-tag"])
