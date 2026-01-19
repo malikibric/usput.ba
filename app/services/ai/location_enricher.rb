@@ -371,15 +371,32 @@ module Ai
         location.set_translation(:name, location.name, locale)
       end
 
-      # Set suitable_experiences
-      if enrichment[:suitable_experiences].present?
-        location.suitable_experiences = enrichment[:suitable_experiences]
+      # Set suitable_experiences using focused classifier
+      # Use metadata generation as hints for better accuracy
+      hints = enrichment[:suitable_experiences].presence
 
-        # Also add through associations
-        enrichment[:suitable_experiences].each do |exp_key|
-          location.add_experience_type(exp_key)
-        rescue StandardError => e
-          log_warn "Could not add experience type '#{exp_key}': #{e.message}"
+      begin
+        classifier = Ai::ExperienceTypeClassifier.new
+        result = classifier.classify(location, dry_run: false, hints: hints)
+
+        if result[:success]
+          log_info "Classified with types: #{result[:types].join(', ')}"
+        elsif hints.present?
+          # Fallback to hints if classifier fails
+          log_warn "Classifier failed, using hints: #{hints.join(', ')}"
+          location.suitable_experiences = hints
+          hints.each do |exp_key|
+            location.add_experience_type(exp_key)
+          rescue StandardError => e
+            log_warn "Could not add experience type '#{exp_key}': #{e.message}"
+          end
+        end
+      rescue StandardError => e
+        log_error "Experience type classification failed: #{e.message}"
+        # Fallback to hints if available
+        if hints.present?
+          location.suitable_experiences = hints
+          hints.each { |exp_key| location.add_experience_type(exp_key) rescue nil }
         end
       end
 

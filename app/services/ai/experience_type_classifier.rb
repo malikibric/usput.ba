@@ -15,12 +15,16 @@ module Ai
     # Classify a single location and add experience types
     # @param location [Location] Location to classify
     # @param dry_run [Boolean] If true, don't save changes
+    # @param hints [Array<String>] Optional hints from initial enrichment
     # @return [Hash] Classification result
-    def classify(location, dry_run: false)
+    def classify(location, dry_run: false, hints: nil)
       log_info "Classifying #{location.name} (ID: #{location.id})"
+      if hints.present?
+        log_info "  Using hints: #{hints.join(', ')}"
+      end
 
       # Get classification from AI
-      types = ai_classify_location(location)
+      types = ai_classify_location(location, hints)
 
       if types.blank?
         log_warn "No types classified for #{location.name}"
@@ -111,8 +115,8 @@ module Ai
 
     private
 
-    def ai_classify_location(location)
-      user_prompt = build_classification_prompt(location)
+    def ai_classify_location(location, hints = nil)
+      user_prompt = build_classification_prompt(location, hints)
       full_prompt = "#{system_prompt}\n\n#{user_prompt}"
 
       response = @llm.ask(full_prompt)
@@ -144,9 +148,15 @@ module Ai
       PROMPT
     end
 
-    def build_classification_prompt(location)
+    def build_classification_prompt(location, hints = nil)
       description_bs = location.translate(:description, :bs)
       description_en = location.translate(:description, :en)
+
+      hints_text = if hints.present? && hints.any?
+        "\nInitial suggestions: #{hints.join(', ')} (consider these but make your own assessment)"
+      else
+        ""
+      end
 
       <<~PROMPT
         Classify this location:
@@ -156,7 +166,7 @@ module Ai
         Category: #{location.category_name || location.location_type}
         #{description_bs.present? ? "Description (BS): #{description_bs.truncate(500)}" : ""}
         #{description_en.present? ? "Description (EN): #{description_en.truncate(500)}" : ""}
-        #{location.tags.present? ? "Tags: #{location.tags.join(', ')}" : ""}
+        #{location.tags.present? ? "Tags: #{location.tags.join(', ')}" : ""}#{hints_text}
 
         Based on this information, which experience types is this location suitable for?
         Respond with type keys only, separated by commas.
