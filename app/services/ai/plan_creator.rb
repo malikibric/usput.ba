@@ -74,7 +74,8 @@ module Ai
       log_info "Creating #{profile_key} plan for #{city || 'multi-city'}"
 
       # Dohvati dostupne Experience-e
-      experiences = fetch_available_experiences(city)
+      profile_activities = profile_data[:preferences][:activities]
+      experiences = fetch_available_experiences(city, profile_activities)
       return nil if experiences.count < min_experiences_per_plan
 
       # AI predlaže strukturu plana
@@ -130,17 +131,25 @@ module Ai
 
     private
 
-    def fetch_available_experiences(city)
-      if city.present?
+    def fetch_available_experiences(city, profile_activities = nil)
+      query = if city.present?
         # Experience-i koji imaju bar jednu lokaciju u tom gradu
         Experience.joins(:locations)
                   .where(locations: { city: city })
                   .distinct
-                  .includes(:locations, :experience_category)
       else
         # Svi Experience-i za multi-city planove
-        Experience.includes(:locations, :experience_category).all
+        Experience.all
       end
+
+      # Filter by experience types if profile activities are provided
+      if profile_activities.present? && profile_activities.any?
+        query = query.joins(locations: :experience_types)
+                     .where(experience_types: { key: profile_activities })
+                     .distinct
+      end
+
+      query.includes(:locations, :experience_category)
     end
 
     def ai_propose_plan(experiences, profile, profile_data, city, duration_days)
