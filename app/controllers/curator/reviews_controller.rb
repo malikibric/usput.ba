@@ -1,6 +1,7 @@
 module Curator
   class ReviewsController < BaseController
     before_action :set_review, only: [ :show, :destroy ]
+    rescue_from ActiveRecord::RecordNotFound, with: :review_not_found
 
     def index
       @reviews = Review.includes(:reviewable, :user).order(created_at: :desc)
@@ -50,6 +51,10 @@ module Curator
 
     def set_review
       @review = Review.find(params[:id])
+    end
+
+    def review_not_found
+      redirect_to curator_reviews_path, alert: "Review not found. It may have been deleted."
     end
 
     def editable_attributes
