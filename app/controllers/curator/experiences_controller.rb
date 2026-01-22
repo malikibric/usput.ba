@@ -57,7 +57,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_update(
         changeable: @experience,
         user: current_user,
-        original_data: @experience.attributes.slice(*editable_attributes),
+        original_data: build_original_data,
         proposed_data: proposal_data_from_params
       )
 
@@ -76,7 +76,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_delete(
         changeable: @experience,
         user: current_user,
-        original_data: @experience.attributes.slice(*editable_attributes)
+        original_data: build_original_data
       )
 
       if proposal.persisted?
@@ -95,6 +95,13 @@ module Curator
 
     def editable_attributes
       %w[title description experience_category_id estimated_duration contact_name contact_email contact_phone contact_website seasons]
+    end
+
+    def build_original_data
+      data = @experience.attributes.slice(*editable_attributes)
+      # Include association data that isn't in attributes
+      data["location_uuids"] = @experience.location_uuids
+      data
     end
 
     def proposal_data_from_params

@@ -82,7 +82,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_update(
         changeable: @location,
         user: current_user,
-        original_data: @location.attributes.slice(*editable_attributes),
+        original_data: build_original_data,
         proposed_data: proposal_data_from_params
       )
 
@@ -107,7 +107,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_delete(
         changeable: @location,
         user: current_user,
-        original_data: @location.attributes.slice(*editable_attributes)
+        original_data: build_original_data
       )
 
       if proposal.persisted?
@@ -126,6 +126,13 @@ module Curator
 
     def editable_attributes
       %w[name description historical_context city lat lng location_type budget phone email website video_url tags suitable_experiences social_links]
+    end
+
+    def build_original_data
+      data = @location.attributes.slice(*editable_attributes)
+      # Include association IDs that aren't in attributes
+      data["location_category_ids"] = @location.location_category_ids
+      data
     end
 
     def proposal_data_from_params
