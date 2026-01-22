@@ -1,4 +1,4 @@
-<%= form_with model: [:curator, plan], class: "space-y-6", data: { turbo: false } do |f| %>
+<%= form_with model: [:curator, plan], class: "space-y-6", local: true do |f| %>
   <% if plan.errors.any? %>
     <div class="rounded-md bg-red-50 p-4">
       <div class="flex">
