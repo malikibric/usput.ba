@@ -73,6 +73,10 @@ module Curator
     end
 
     def update
+      Rails.logger.info "[Curator::Locations] Update called for location #{@location.id} by user #{current_user.id}"
+      Rails.logger.info "[Curator::Locations] Params: #{params.inspect}"
+      Rails.logger.info "[Curator::Locations] Proposal data: #{proposal_data_from_params.inspect}"
+
       # Use find_or_create to ensure only one pending proposal per resource
       # This allows multiple curators to contribute to the same proposal
       proposal = ContentChange.find_or_create_for_update(
@@ -81,6 +85,8 @@ module Curator
         original_data: @location.attributes.slice(*editable_attributes),
         proposed_data: proposal_data_from_params
       )
+
+      Rails.logger.info "[Curator::Locations] Proposal created: persisted=#{proposal.persisted?}, errors=#{proposal.errors.full_messages}"
 
       if proposal.persisted?
         action = proposal.contributions.exists?(user: current_user) ? "proposal_contributed" : "proposal_updated"
