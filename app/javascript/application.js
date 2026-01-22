@@ -1,6 +1,9 @@
 // Configure your import map in config/importmap.rb
 import "@hotwired/turbo-rails"
+import * as ActiveStorage from "@rails/activestorage"
 import "controllers"
+
+ActiveStorage.start()
 import { planSyncService } from "services/plan_sync_service"
 
 // Auto-sync plans when logged in user loads the page

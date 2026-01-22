@@ -33,6 +33,7 @@
                       <p class="mt-1 text-xs text-gray-500"><%= t("curator.photo_suggestions.upload_hint") %></p>
                     </div>
                     <%= f.file_field :photo, accept: "image/*", class: "sr-only", id: "photo_suggestion_photo",
+                        direct_upload: true,
                         data: { photo_upload_target: "input", action: "change->photo-upload#select" } %>
                   </label>
                   <div data-photo-upload-target="preview" class="hidden">
