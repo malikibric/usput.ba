@@ -103,23 +103,43 @@ module Curator
     end
 
     def editable_attributes
-      %w[title notes city_name visibility start_date end_date]
+      %w[title notes city_name visibility start_date end_date preferences]
     end
 
     def proposal_data_from_params
       data = plan_params.to_h
+
+      # Build preferences from form fields
+      data["preferences"] = build_preferences_from_params
+
+      # Include experience_uuids for managing plan experiences
+      if params[:plan][:experience_days].present?
+        data["experience_days"] = params[:plan][:experience_days].to_unsafe_h
+      end
+
       # Include the user_id for new plans (will be the curator who proposed)
       data["user_id"] = current_user.id if action_name == "create"
       data
     end
 
+    def build_preferences_from_params
+      prefs = {}
+      prefs["budget"] = params[:plan][:budget] if params[:plan][:budget].present?
+      prefs["daily_hours"] = params[:plan][:daily_hours].to_i if params[:plan][:daily_hours].present?
+      prefs["interests"] = params[:plan][:interests]&.reject(&:blank?) || []
+      prefs["custom_title"] = params[:plan][:custom_title] if params[:plan][:custom_title].present?
+      prefs
+    end
+
     def plan_params
-      params.require(:plan).permit(:title, :notes, :city_name, :visibility, :start_date, :end_date)
+      params.require(:plan).permit(:title, :notes, :city_name, :visibility, :start_date, :end_date,
+                                   :budget, :daily_hours, :custom_title, interests: [])
     end
 
     def load_form_options
       @city_names = Location.where.not(city: [ nil, "" ]).distinct.pluck(:city).sort
       @experiences = Experience.includes(:locations).order(:title)
+      @experience_types = ExperienceType.active.order(:position)
     end
   end
 end

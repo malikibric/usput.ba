@@ -1,4 +1,4 @@
-<%= form_with model: [:curator, plan], class: "space-y-6" do |f| %>
+<%= form_with model: [:curator, plan], class: "space-y-6", data: { turbo: false } do |f| %>
   <% if plan.errors.any? %>
     <div class="rounded-md bg-red-50 p-4">
       <div class="flex">
@@ -16,6 +16,7 @@
     </div>
   <% end %>
 
+  <%# Basic Information Section %>
   <div class="rounded-lg bg-white shadow">
     <div class="px-4 py-5 sm:px-6">
       <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t("curator.plans.sections.basic_info") %></h2>
@@ -65,6 +66,74 @@
     </div>
   </div>
 
+  <%# Preferences Section %>
+  <div class="rounded-lg bg-white shadow">
+    <div class="px-4 py-5 sm:px-6">
+      <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t("curator.plans.sections.preferences", default: "Preferences") %></h2>
+      <p class="text-sm text-gray-500 mb-4"><%= t("curator.plans.preferences_hint", default: "Set default preferences for this plan") %></p>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <%= f.label :budget, t("curator.plans.budget", default: "Budget"), class: "block text-sm font-medium text-gray-700" %>
+          <%= f.select :budget,
+              options_for_select([
+                [t("curator.plans.select_budget", default: "Select budget..."), ""],
+                [t("curator.plans.budget_low", default: "Low"), "low"],
+                [t("curator.plans.budget_medium", default: "Medium"), "medium"],
+                [t("curator.plans.budget_high", default: "High"), "high"]
+              ], plan.preferences&.dig("budget")),
+              {},
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm" %>
+        </div>
+
+        <div>
+          <%= f.label :daily_hours, t("curator.plans.daily_hours", default: "Hours per day"), class: "block text-sm font-medium text-gray-700" %>
+          <%= f.select :daily_hours,
+              options_for_select([
+                [t("curator.plans.select_hours", default: "Select hours..."), ""],
+                ["4 #{t('curator.plans.hours', default: 'hours')}", 4],
+                ["6 #{t('curator.plans.hours', default: 'hours')}", 6],
+                ["8 #{t('curator.plans.hours', default: 'hours')}", 8],
+                ["10 #{t('curator.plans.hours', default: 'hours')}", 10],
+                ["12 #{t('curator.plans.hours', default: 'hours')}", 12]
+              ], plan.preferences&.dig("daily_hours")),
+              {},
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm" %>
+        </div>
+
+        <div class="sm:col-span-2">
+          <%= f.label :custom_title, t("curator.plans.custom_title", default: "Custom Title"), class: "block text-sm font-medium text-gray-700" %>
+          <%= f.text_field :custom_title,
+              value: plan.preferences&.dig("custom_title"),
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm",
+              placeholder: t("curator.plans.custom_title_placeholder", default: "Optional custom display title") %>
+          <p class="mt-1 text-sm text-gray-500"><%= t("curator.plans.custom_title_hint", default: "If set, this will be shown instead of the auto-generated title") %></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# Interests Section %>
+  <% if defined?(experience_types) && experience_types.any? %>
+  <div class="rounded-lg bg-white shadow">
+    <div class="px-4 py-5 sm:px-6">
+      <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t("curator.plans.sections.interests", default: "Interests") %></h2>
+      <p class="text-sm text-gray-500 mb-4"><%= t("curator.plans.interests_hint", default: "Select interests that this plan focuses on") %></p>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <% current_interests = plan.preferences&.dig("interests") || [] %>
+        <% experience_types.each do |exp_type| %>
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <%= check_box_tag "plan[interests][]", exp_type.key, current_interests.include?(exp_type.key), class: "rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" %>
+            <span class="text-sm text-gray-700"><%= exp_type.name %></span>
+          </label>
+        <% end %>
+      </div>
+    </div>
+  </div>
+  <% end %>
+
+  <%# Experiences Section %>
   <% if plan.persisted? %>
     <div class="rounded-lg bg-white shadow">
       <div class="px-4 py-5 sm:px-6">
@@ -72,17 +141,40 @@
         <p class="text-sm text-gray-500 mb-4"><%= t("curator.plans.experiences_hint") %></p>
 
         <% if plan.plan_experiences.any? %>
-          <ul class="space-y-2 mb-4">
-            <% plan.plan_experiences.includes(:experience).order(:day_number, :position).each do |pe| %>
-              <li class="flex items-center gap-2 text-sm text-gray-600 p-2 bg-gray-50 rounded">
-                <span class="text-gray-400"><%= t("plans.show.day", number: pe.day_number) %></span>
-                <span class="font-medium"><%= pe.experience.title %></span>
-              </li>
+          <% max_day = plan.plan_experiences.maximum(:day_number) || 1 %>
+          <div class="space-y-4">
+            <% (1..max_day).each do |day_num| %>
+              <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-medium text-gray-900 mb-3"><%= t("plans.show.day", number: day_num) %></h3>
+                <ul class="space-y-2">
+                  <% plan.plan_experiences_for_day(day_num).includes(:experience).each do |pe| %>
+                    <li class="flex items-center justify-between gap-2 text-sm text-gray-600 p-2 bg-gray-50 rounded">
+                      <span class="font-medium"><%= pe.experience.title %></span>
+                      <span class="text-gray-400"><%= pe.experience.formatted_duration %></span>
+                    </li>
+                  <% end %>
+                </ul>
+              </div>
             <% end %>
-          </ul>
+          </div>
         <% else %>
           <p class="text-sm text-gray-500 italic"><%= t("curator.plans.no_experiences_yet") %></p>
         <% end %>
+
+        <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-blue-700">
+                <%= t("curator.plans.experiences_edit_hint", default: "To add or remove experiences, use the plan builder on the public site or contact an admin.") %>
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   <% end %>
