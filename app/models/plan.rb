@@ -21,6 +21,43 @@ class Plan < ApplicationRecord
   has_many :plan_experiences, -> { order(day_number: :asc, position: :asc) }, dependent: :destroy
   has_many :experiences, through: :plan_experiences
 
+  # Setter for experience_days (used by content change proposals)
+  # Format: { "1" => ["uuid1", "uuid2"], "2" => ["uuid3"] }
+  def experience_days=(days_hash)
+    return if days_hash.blank?
+
+    transaction do
+      # Clear existing experiences
+      plan_experiences.destroy_all
+
+      # Add new experiences for each day
+      days_hash.each do |day_number, experience_uuids|
+        next if experience_uuids.blank?
+
+        experience_uuids.each_with_index do |uuid, position|
+          next if uuid.blank?
+          experience = Experience.find_by(uuid: uuid)
+          next unless experience
+
+          plan_experiences.create!(
+            experience: experience,
+            day_number: day_number.to_i,
+            position: position
+          )
+        end
+      end
+    end
+  end
+
+  # Getter for experience_days
+  def experience_days
+    days = {}
+    plan_experiences.includes(:experience).group_by(&:day_number).each do |day_num, plan_exps|
+      days[day_num.to_s] = plan_exps.sort_by(&:position).map { |pe| pe.experience.uuid }
+    end
+    days
+  end
+
   # Validacije
   validates :title, presence: true
   # start_date and end_date are optional - users pick their own dates

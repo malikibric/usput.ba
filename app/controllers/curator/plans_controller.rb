@@ -66,7 +66,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_update(
         changeable: @plan,
         user: current_user,
-        original_data: @plan.attributes.slice(*editable_attributes),
+        original_data: build_original_data,
         proposed_data: proposal_data_from_params
       )
 
@@ -85,7 +85,7 @@ module Curator
       proposal = ContentChange.find_or_create_for_delete(
         changeable: @plan,
         user: current_user,
-        original_data: @plan.attributes.slice(*editable_attributes)
+        original_data: build_original_data
       )
 
       if proposal.persisted?
@@ -104,6 +104,21 @@ module Curator
 
     def editable_attributes
       %w[title notes city_name visibility start_date end_date preferences]
+    end
+
+    def build_original_data
+      data = @plan.attributes.slice(*editable_attributes)
+      # Include current experience structure
+      data["experience_days"] = build_current_experience_days
+      data
+    end
+
+    def build_current_experience_days
+      days = {}
+      @plan.plan_experiences.includes(:experience).group_by(&:day_number).each do |day_num, plan_exps|
+        days[day_num.to_s] = plan_exps.sort_by(&:position).map { |pe| pe.experience.uuid }
+      end
+      days
     end
 
     def proposal_data_from_params

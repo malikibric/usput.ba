@@ -134,49 +134,46 @@
   <% end %>
 
   <%# Experiences Section %>
-  <% if plan.persisted? %>
-    <div class="rounded-lg bg-white shadow">
-      <div class="px-4 py-5 sm:px-6">
-        <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t("curator.plans.sections.experiences") %></h2>
-        <p class="text-sm text-gray-500 mb-4"><%= t("curator.plans.experiences_hint") %></p>
+  <% if defined?(experiences) && experiences.any? %>
+  <div class="rounded-lg bg-white shadow">
+    <div class="px-4 py-5 sm:px-6">
+      <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t("curator.plans.sections.experiences") %></h2>
+      <p class="text-sm text-gray-500 mb-4"><%= t("curator.plans.experiences_management_hint", default: "Select experiences for each day of the plan. The order in each select determines the order of experiences.") %></p>
 
-        <% if plan.plan_experiences.any? %>
-          <% max_day = plan.plan_experiences.maximum(:day_number) || 1 %>
-          <div class="space-y-4">
-            <% (1..max_day).each do |day_num| %>
-              <div class="border border-gray-200 rounded-lg p-4">
-                <h3 class="font-medium text-gray-900 mb-3"><%= t("plans.show.day", number: day_num) %></h3>
-                <ul class="space-y-2">
-                  <% plan.plan_experiences_for_day(day_num).includes(:experience).each do |pe| %>
-                    <li class="flex items-center justify-between gap-2 text-sm text-gray-600 p-2 bg-gray-50 rounded">
-                      <span class="font-medium"><%= pe.experience.title %></span>
-                      <span class="text-gray-400"><%= pe.experience.formatted_duration %></span>
-                    </li>
-                  <% end %>
-                </ul>
-              </div>
-            <% end %>
+      <% max_days = [plan.plan_experiences.maximum(:day_number) || 1, 7].max %>
+      <div class="space-y-4" id="plan-days">
+        <% (1..max_days).each do |day_num| %>
+          <% current_experience_uuids = plan.persisted? ? plan.plan_experiences_for_day(day_num).includes(:experience).map { |pe| pe.experience.uuid } : [] %>
+          <div class="border border-gray-200 rounded-lg p-4">
+            <label class="block font-medium text-gray-900 mb-2">
+              <%= t("plans.show.day", number: day_num) %>
+            </label>
+            <%= select_tag "plan[experience_days][#{day_num}][]",
+                options_from_collection_for_select(experiences, :uuid, :title, current_experience_uuids),
+                multiple: true,
+                class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm",
+                data: { placeholder: t("curator.plans.select_experiences", default: "Select experiences for this day...") } %>
+            <p class="mt-1 text-xs text-gray-500"><%= t("curator.plans.day_hint", default: "Hold Ctrl/Cmd to select multiple. Leave empty if no activities for this day.") %></p>
           </div>
-        <% else %>
-          <p class="text-sm text-gray-500 italic"><%= t("curator.plans.no_experiences_yet") %></p>
         <% end %>
+      </div>
 
-        <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-              </svg>
-            </div>
-            <div class="ml-3">
-              <p class="text-sm text-blue-700">
-                <%= t("curator.plans.experiences_edit_hint", default: "To add or remove experiences, use the plan builder on the public site or contact an admin.") %>
-              </p>
-            </div>
+      <div class="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-amber-700">
+              <%= t("curator.plans.experiences_warning", default: "Changes to experiences will replace the current plan structure when the proposal is approved.") %>
+            </p>
           </div>
         </div>
       </div>
     </div>
+  </div>
   <% end %>
 
   <div class="flex justify-end gap-3">
