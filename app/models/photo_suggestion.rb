@@ -16,6 +16,23 @@ class PhotoSuggestion < ApplicationRecord
   validates :location, presence: true
   validates :description, length: { maximum: 1000 }
   validate :photo_or_url_present
+  validate :acceptable_photo
+
+  # Validate photo file type and size
+  def acceptable_photo
+    return unless photo.attached?
+
+    # Max 10MB
+    if photo.blob.byte_size > 10.megabytes
+      errors.add(:photo, "is too large (max 10MB)")
+    end
+
+    # Only images
+    acceptable_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    unless acceptable_types.include?(photo.blob.content_type)
+      errors.add(:photo, "must be JPEG, PNG, GIF, or WebP")
+    end
+  end
 
   # Sanitize description
   before_save :sanitize_description
