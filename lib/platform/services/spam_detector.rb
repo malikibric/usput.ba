@@ -74,7 +74,6 @@ module Platform
           if analysis[:is_spam]
             if auto_block
               curator.block_for_spam!(analysis[:reason])
-              log_spam_block(curator, analysis)
             end
             { blocked: true, reason: analysis[:reason], details: analysis }
           elsif analysis[:suspicious]
@@ -170,7 +169,7 @@ module Platform
           actions.each_cons(2) do |prev, curr|
             if prev[0] == curr[0] && prev[1] == curr[1]
               current_consecutive += 1
-              max_consecutive = [max_consecutive, current_consecutive].max
+              max_consecutive = [ max_consecutive, current_consecutive ].max
             else
               current_consecutive = 1
             end
@@ -208,20 +207,6 @@ module Platform
               .where("activity_count_today > ?", (User::MAX_ACTIVITIES_PER_DAY * 0.5).to_i)
               .order(activity_count_today: :desc)
               .limit(10)
-        end
-
-        def log_spam_block(curator, analysis)
-          PlatformAuditLog.create!(
-            action: "update",
-            record_type: "User",
-            record_id: curator.id,
-            change_data: {
-              spam_blocked: true,
-              reason: analysis[:reason],
-              analysis: analysis.except(:is_spam, :suspicious)
-            },
-            triggered_by: "platform_spam_detector"
-          )
         end
       end
     end

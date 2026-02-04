@@ -23,7 +23,7 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
 
   # Parser tests
   test "parses synthesize audio command" do
-    ast = Platform::DSL::Parser.parse('synthesize audio for location { id: 123 }')
+    ast = Platform::DSL::Parser.parse("synthesize audio for location { id: 123 }")
 
     assert_equal :audio, ast[:type]
     assert_equal :synthesize, ast[:action]
@@ -78,7 +78,7 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
   end
 
   test "estimates audio cost with breakdown by city" do
-    result = Platform::DSL.execute('estimate audio cost for locations { }')
+    result = Platform::DSL.execute("estimate audio cost for locations { }")
 
     assert_equal :estimate_audio_cost, result[:action]
     assert result[:total_locations] >= 2
@@ -88,7 +88,7 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
   # Error handling
   test "rejects audio synthesis for non-location tables" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('synthesize audio for experience { id: 1 }')
+      Platform::DSL.execute("synthesize audio for experience { id: 1 }")
     end
 
     assert_match(/samo za lokacije/i, error.message)
@@ -96,7 +96,7 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
 
   test "rejects audio cost estimation for non-location tables" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('estimate audio cost for experiences { }')
+      Platform::DSL.execute("estimate audio cost for experiences { }")
     end
 
     assert_match(/samo za lokacije/i, error.message)
@@ -104,7 +104,7 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
 
   test "rejects synthesize for non-existent location" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('synthesize audio for location { id: 999999 }')
+      Platform::DSL.execute("synthesize audio for location { id: 999999 }")
     end
 
     assert_match(/nije pronađen/i, error.message)
@@ -185,29 +185,6 @@ class Platform::DSL::AudioTest < ActiveSupport::TestCase
 
       assert result[:success]
       # Voice should have been configured via Setting.set
-    end
-  end
-
-  test "synthesize_audio creates audit log" do
-    mock_generator = Object.new
-    mock_result = {
-      location: @location.name,
-      locale: "bs",
-      status: :generated,
-      duration_estimate: "4.5 min",
-      audio_info: nil
-    }
-    mock_generator.define_singleton_method(:generate) { |**_args| mock_result }
-
-    Ai::AudioTourGenerator.stub(:new, ->(_loc) { mock_generator }) do
-      assert_difference "PlatformAuditLog.count", 1 do
-        Platform::DSL.execute("synthesize audio for location { id: #{@location.id} }")
-      end
-
-      log = PlatformAuditLog.last
-      assert_equal "create", log.action
-      assert_equal "AudioTour", log.record_type
-      assert_equal "platform_dsl_audio", log.triggered_by
     end
   end
 

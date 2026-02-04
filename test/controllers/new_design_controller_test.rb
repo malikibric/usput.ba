@@ -132,6 +132,7 @@ class NewDesignControllerTest < ActionDispatch::IntegrationTest
     Plan.delete_all
     ExperienceLocation.delete_all
     Experience.delete_all
+    LocationCategoryAssignment.delete_all
     Location.delete_all
     Browse.delete_all
 
@@ -163,25 +164,25 @@ class NewDesignControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "explore filters by type location" do
-    get explore_path, params: { types: ["location"] }
+    get explore_path, params: { types: [ "location" ] }
 
     assert_response :success
   end
 
   test "explore filters by type experience" do
-    get explore_path, params: { types: ["experience"] }
+    get explore_path, params: { types: [ "experience" ] }
 
     assert_response :success
   end
 
   test "explore filters by type plan" do
-    get explore_path, params: { types: ["plan"] }
+    get explore_path, params: { types: [ "plan" ] }
 
     assert_response :success
   end
 
   test "explore filters by multiple types" do
-    get explore_path, params: { types: ["location", "experience"] }
+    get explore_path, params: { types: [ "location", "experience" ] }
 
     assert_response :success
   end
@@ -291,7 +292,7 @@ class NewDesignControllerTest < ActionDispatch::IntegrationTest
   test "explore handles combined filters" do
     get explore_path, params: {
       q: "tour",
-      types: ["experience"],
+      types: [ "experience" ],
       season: "summer",
       min_rating: "3",
       sort: "rating"
@@ -321,7 +322,7 @@ class NewDesignControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "explore handles blank type filter" do
-    get explore_path, params: { types: [""] }
+    get explore_path, params: { types: [ "" ] }
 
     assert_response :success
   end
@@ -418,7 +419,7 @@ class NewDesignControllerTest < ActionDispatch::IntegrationTest
   test "explore handles all filter combinations" do
     get explore_path, params: {
       q: "tour",
-      types: ["location", "experience", "plan"],
+      types: [ "location", "experience", "plan" ],
       season: "spring",
       budget: "medium",
       duration: "medium",

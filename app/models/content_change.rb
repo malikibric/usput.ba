@@ -184,7 +184,7 @@ class ContentChange < ApplicationRecord
 
   # All users involved (proposer + contributors)
   def all_contributors
-    ([user] + contributors).uniq
+    ([ user ] + contributors).uniq
   end
 
   private
@@ -209,8 +209,14 @@ class ContentChange < ApplicationRecord
     # Filter to only allowed attributes - prevent mass assignment
     allowed_attrs = safe_attributes_for(klass)
     safe_data = proposed_data.slice(*allowed_attrs)
-    record = klass.new(safe_data)
-    record.save!
+
+    # Use service object for Location to handle experience types explicitly
+    if klass.name == "Location"
+      record = apply_create_location!(safe_data)
+    else
+      record = klass.create!(safe_data)
+    end
+
     update!(changeable: record)
 
     # Mark as needing AI regeneration for translations/audio
@@ -221,7 +227,13 @@ class ContentChange < ApplicationRecord
     # Filter to only allowed attributes - prevent mass assignment
     allowed_attrs = safe_attributes_for(changeable.class)
     safe_data = proposed_data.slice(*allowed_attrs)
-    changeable.update!(safe_data)
+
+    # Use service object for Location to handle experience types explicitly
+    if changeable.is_a?(Location)
+      apply_update_location!(safe_data)
+    else
+      changeable.update!(safe_data)
+    end
 
     # Mark as needing AI regeneration for translations/audio
     mark_for_ai_regeneration!(changeable)
@@ -240,11 +252,33 @@ class ContentChange < ApplicationRecord
     resource.update_column(:needs_ai_regeneration, true)
   end
 
+  # Use LocationCreator service to handle experience types explicitly
+  def apply_create_location!(safe_data)
+    creator = LocationCreator.new(safe_data)
+    creator.call
+
+    unless creator.success?
+      raise ActiveRecord::RecordInvalid.new(creator.location)
+    end
+
+    creator.location
+  end
+
+  # Use LocationUpdater service to handle experience types explicitly
+  def apply_update_location!(safe_data)
+    updater = LocationUpdater.new(changeable, safe_data)
+    updater.call
+
+    unless updater.success?
+      raise ActiveRecord::RecordInvalid.new(changeable)
+    end
+  end
+
   # Define safe attributes for each model to prevent unauthorized changes
   def safe_attributes_for(klass)
     case klass.name
     when "Location"
-      %w[name description historical_context city lat lng location_type budget phone email website video_url tags suitable_experiences social_links location_category_ids]
+      %w[name description historical_context city lat lng budget phone email website video_url tags suitable_experiences social_links location_category_ids]
     when "Experience"
       %w[title description experience_category_id estimated_duration contact_name contact_email contact_phone contact_website seasons location_uuids]
     when "Plan"

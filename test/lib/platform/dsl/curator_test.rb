@@ -47,21 +47,21 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
   end
 
   test "parses curators show command" do
-    ast = Platform::DSL::Parser.parse('curators { id: 123 } | show')
+    ast = Platform::DSL::Parser.parse("curators { id: 123 } | show")
 
     assert_equal :curators_query, ast[:type]
     assert_equal 123, ast[:filters][:id]
   end
 
   test "parses curators activity command" do
-    ast = Platform::DSL::Parser.parse('curators { id: 123 } | activity')
+    ast = Platform::DSL::Parser.parse("curators { id: 123 } | activity")
 
     assert_equal :curators_query, ast[:type]
     assert_equal :activity, ast[:operations].first[:name]
   end
 
   test "parses curators check_spam command" do
-    ast = Platform::DSL::Parser.parse('curators | check_spam')
+    ast = Platform::DSL::Parser.parse("curators | check_spam")
 
     assert_equal :curators_query, ast[:type]
     assert_equal :check_spam, ast[:operations].first[:name]
@@ -78,7 +78,7 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
   end
 
   test "parses unblock curator command" do
-    ast = Platform::DSL::Parser.parse('unblock curator { id: 123 }')
+    ast = Platform::DSL::Parser.parse("unblock curator { id: 123 }")
 
     assert_equal :curator_management, ast[:type]
     assert_equal :unblock, ast[:action]
@@ -87,7 +87,7 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
 
   # Execution tests - List curators
   test "lists all curators" do
-    result = Platform::DSL.execute('curators | list')
+    result = Platform::DSL.execute("curators | list")
 
     assert_equal :list_curators, result[:action]
     assert result[:count] >= 2
@@ -151,7 +151,7 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
   end
 
   test "checks spam for all curators" do
-    result = Platform::DSL.execute('curators | check_spam')
+    result = Platform::DSL.execute("curators | check_spam")
 
     assert_equal :check_spam_all, result[:action]
     assert result[:result][:checked] >= 2
@@ -160,7 +160,7 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
 
   # Execution tests - Count curators
   test "counts curators" do
-    result = Platform::DSL.execute('curators | count')
+    result = Platform::DSL.execute("curators | count")
 
     assert result[:total] >= 2
     assert result[:active] >= 1
@@ -252,29 +252,7 @@ class Platform::DSL::CuratorTest < ActiveSupport::TestCase
     assert_match(/nije kurator/i, error.message)
   end
 
-  # Audit logging
-  test "creates audit log for blocking" do
-    assert_difference "PlatformAuditLog.count", 1 do
-      Platform::DSL.execute("block curator { id: #{@curator.id} } reason \"test\"")
-    end
-
-    log = PlatformAuditLog.last
-    assert_equal "update", log.action
-    assert_equal "User", log.record_type
-    assert_equal "platform_dsl_curator", log.triggered_by
-  end
-
-  test "creates audit log for unblocking" do
-    @curator.block_for_spam!("test")
-
-    assert_difference "PlatformAuditLog.count", 1 do
-      Platform::DSL.execute("unblock curator { id: #{@curator.id} }")
-    end
-
-    log = PlatformAuditLog.last
-    assert_equal "update", log.action
-    assert_equal "User", log.record_type
-  end
+  # Audit logging removed - tests no longer needed
 end
 
 # SpamDetector service tests

@@ -11,7 +11,11 @@ class Location < ApplicationRecord
   reverse_geocoded_by :lat, :lng
 
   # Active Storage attachments
-  has_many_attached :photos
+  has_many_attached :photos do |attachable|
+    attachable.variant :thumb, resize_to_limit: [ 100, 100 ]
+    attachable.variant :medium, resize_to_limit: [ 400, 400 ]
+    attachable.variant :large, resize_to_limit: [ 800, 800 ]
+  end
 
   # Asocijacije
   has_many :experience_locations, dependent: :destroy
@@ -28,17 +32,6 @@ class Location < ApplicationRecord
   # Enums
   enum :budget, { low: 0, medium: 1, high: 2 }
 
-  # DEPRECATED: location_type enum - use location_category instead
-  # Kept for backwards compatibility during migration period
-  enum :location_type, {
-    place: 0,        # Standardna lokacija/atrakcija
-    guide: 1,        # Lokalni vodič
-    business: 2,     # Lokalni biznis/firma
-    restaurant: 3,   # Restoran/kafić
-    artisan: 4,      # Zanatlija/proizvođač
-    accommodation: 5 # Smještaj
-  }
-
   # Validations
   validates :name, presence: true
   validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
@@ -50,7 +43,10 @@ class Location < ApplicationRecord
   validates :video_url, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]), message: "must be a valid URL" }, allow_blank: true
 
   # Callbacks
-  after_save :sync_experience_types_from_json, if: :saved_change_to_suitable_experiences?
+  # Sync relational data from JSON cache after creation (for backwards compatibility)
+  after_create :sync_experience_types_from_pending, if: -> { @pending_experience_types.present? }
+  # Sync JSON cache from relational data when experience_types association changes
+  after_save :sync_suitable_experiences_cache, if: :should_sync_experience_types?
 
   # Custom validation for coordinates (both or neither)
   validate :coordinates_must_be_complete
@@ -73,13 +69,12 @@ class Location < ApplicationRecord
     joins(:audio_tours).merge(AudioTour.with_audio).distinct
   }
 
-  # Scopes za tipove lokacija - uses location_categories (many-to-many) with fallback to legacy enum
+  # Scopes za tipove lokacija - uses location_categories (many-to-many)
   # Using subqueries instead of joins + distinct to avoid ORDER BY conflicts
   scope :places, -> {
     # Locations that either:
     # 1. Have no categories assigned, OR
-    # 2. Have at least one non-contact category, OR
-    # 3. Have legacy place type
+    # 2. Have at least one non-contact category
     where(
       # No categories assigned
       "NOT EXISTS (SELECT 1 FROM location_category_assignments WHERE location_category_assignments.location_id = locations.id)"
@@ -90,18 +85,15 @@ class Location < ApplicationRecord
          JOIN location_categories lc ON lc.id = lca.location_category_id
          WHERE lca.location_id = locations.id AND lc.key NOT IN (?))", %w[guide business artisan]
       )
-    ).or(
-      # Legacy place type
-      where(location_type: :place)
     )
   }
   scope :contacts, -> {
-    # Locations with contact category, OR legacy non-place type
+    # Locations with contact category
     where(
       "EXISTS (SELECT 1 FROM location_category_assignments lca
        JOIN location_categories lc ON lc.id = lca.location_category_id
        WHERE lca.location_id = locations.id AND lc.key IN (?))", %w[guide business artisan]
-    ).or(where.not(location_type: :place))
+    )
   }
   scope :by_category, ->(category_key) {
     return all if category_key.blank?
@@ -111,22 +103,19 @@ class Location < ApplicationRecord
        WHERE lca.location_id = locations.id AND lc.key = ?)", category_key
     )
   }
-  scope :with_contact_info, -> { where.not(phone: [nil, ""]).or(where.not(email: [nil, ""])) }
+  scope :with_contact_info, -> { where.not(phone: [ nil, "" ]).or(where.not(email: [ nil, "" ])) }
 
-  # Filter by type/category - supports both new category key and legacy enum
+  # Filter by type/category
   scope :by_type, ->(type) {
     return all if type.blank?
-    # Try new category first, fall back to legacy enum
     category = LocationCategory.find_by_key(type)
-    if category
-      where(
-        "EXISTS (SELECT 1 FROM location_category_assignments
-         WHERE location_category_assignments.location_id = locations.id
-         AND location_category_assignments.location_category_id = ?)", category.id
-      )
-    else
-      where(location_type: type)
-    end
+    return none unless category
+
+    where(
+      "EXISTS (SELECT 1 FROM location_category_assignments
+       WHERE location_category_assignments.location_id = locations.id
+       AND location_category_assignments.location_category_id = ?)", category.id
+    )
   }
 
   # NOTE: For search/listing, prefer Browse.by_budget and Browse.by_min_rating
@@ -188,6 +177,24 @@ class Location < ApplicationRecord
     super || []
   end
 
+  # ============================================================================
+  # EXPERIENCE TYPES API
+  # ============================================================================
+  # Relational data (experience_types association) is the source of truth.
+  # JSON field (suitable_experiences) is a cache, auto-synced after changes.
+  #
+  # RECOMMENDED API:
+  #   - set_experience_types(keys)      - Set all types at once (PREFERRED)
+  #   - add_experience_type(key)        - Add one type
+  #   - remove_experience_type(key)     - Remove one type
+  #   - suitable_experiences=           - Alias for set_experience_types (backwards compatible)
+  #
+  # READ API:
+  #   - suitable_experiences            - Get array of type keys
+  #   - experience_types                - Get ExperienceType objects
+  #   - has_experience_type?(key)       - Check if type exists
+  # ============================================================================
+
   # Get suitable experiences (combines JSON field with association)
   def suitable_experiences
     # Prefer association data if already loaded, otherwise use JSON field
@@ -198,10 +205,35 @@ class Location < ApplicationRecord
     end
   end
 
-  # Set suitable experiences (updates both JSON and association)
+  # Set suitable experiences (updates relational data, JSON is auto-synced)
+  # This is the main API for setting experience types from forms/imports
   def suitable_experiences=(values)
-    super(values)
-    sync_experience_types_from_array(values) if persisted?
+    # Store temporarily for callback check
+    @pending_experience_types = Array(values).map(&:to_s).map(&:downcase).uniq
+    # If persisted, update association immediately
+    set_experience_types(@pending_experience_types) if persisted?
+  end
+
+  # Set experience types from array of keys (main API)
+  # This is the source of truth - updates relational data and triggers JSON sync
+  def set_experience_types(keys)
+    return unless persisted?
+    keys = Array(keys).map(&:to_s).map(&:downcase).uniq.reject(&:blank?)
+
+    # Find or create experience types
+    types = keys.map do |key|
+      ExperienceType.find_or_create_by!(key: key) do |et|
+        et.name = key.titleize
+        et.active = true
+        et.position = ExperienceType.maximum(:position).to_i + 1
+      end
+    end
+
+    # Update association (this is the source of truth)
+    self.experience_types = types
+
+    # Sync JSON cache
+    sync_suitable_experiences_cache
   end
 
   # Helper to add a tag
@@ -216,6 +248,7 @@ class Location < ApplicationRecord
 
   # Helper to add an experience type
   # Creates the ExperienceType if it doesn't exist (find_or_create)
+  # Source of truth: Updates relational data, triggers JSON sync
   def add_experience_type(experience_type_or_key)
     exp_type = if experience_type_or_key.is_a?(ExperienceType)
       experience_type_or_key
@@ -233,11 +266,14 @@ class Location < ApplicationRecord
 
     return unless exp_type
 
+    # Update relational data (source of truth)
     location_experience_types.find_or_create_by(experience_type: exp_type)
-    update_suitable_experiences_json
+    # Sync JSON cache
+    sync_suitable_experiences_cache
   end
 
   # Helper to remove an experience type
+  # Source of truth: Updates relational data, triggers JSON sync
   def remove_experience_type(experience_type_or_key)
     exp_type = experience_type_or_key.is_a?(ExperienceType) ?
       experience_type_or_key :
@@ -245,8 +281,10 @@ class Location < ApplicationRecord
 
     return unless exp_type
 
+    # Update relational data (source of truth)
     location_experience_types.find_by(experience_type: exp_type)&.destroy
-    update_suitable_experiences_json
+    # Sync JSON cache
+    sync_suitable_experiences_cache
   end
 
   # Legacy method for backwards compatibility
@@ -335,13 +373,12 @@ class Location < ApplicationRecord
 
   # Check if this is a contact type (guide, business, artisan)
   def contact?
-    location_categories.any?(&:contact_type?) || (location_type.present? && !place?)
+    location_categories.any?(&:contact_type?)
   end
 
   # Check if this is a place type (not a contact)
   def place_type?
-    return place? if location_categories.empty?
-    location_categories.any?(&:place_type?)
+    location_categories.empty? || location_categories.any?(&:place_type?)
   end
 
   # Get primary category (first one marked as primary, or just first one)
@@ -355,14 +392,14 @@ class Location < ApplicationRecord
     location_categories.pluck(:key)
   end
 
-  # Get primary category key (for display and API - backwards compatible)
+  # Get primary category key (for display and API)
   def category_key
-    primary_category&.key || location_type
+    primary_category&.key
   end
 
-  # Get primary category name (for display - backwards compatible)
+  # Get primary category name (for display)
   def category_name
-    primary_category&.name || location_type&.titleize
+    primary_category&.name
   end
 
   # Get all category names
@@ -541,31 +578,37 @@ class Location < ApplicationRecord
 
   private
 
-  # Sync experience types from JSON field to association
-  def sync_experience_types_from_json
-    return unless persisted?
-    json_experiences = read_attribute(:suitable_experiences) || []
-    sync_experience_types_from_array(json_experiences)
+  # Sync relational data from pending experience types after creation
+  # This handles the case where suitable_experiences is set during Location.create!
+  def sync_experience_types_from_pending
+    return unless @pending_experience_types.present?
+    set_experience_types(@pending_experience_types)
   end
 
-  # Sync experience types from array to association
-  def sync_experience_types_from_array(experience_keys)
-    return unless persisted?
-    return if experience_keys.blank?
-
-    experience_keys = Array(experience_keys).map(&:to_s).map(&:downcase).uniq
-
-    # Find matching experience types
-    types = ExperienceType.where("LOWER(key) IN (?)", experience_keys)
-
-    # Update association
-    self.experience_types = types
+  # Check if we should sync experience types cache
+  def should_sync_experience_types?
+    # Don't run if we just handled pending types (avoid double sync)
+    return false if @pending_experience_types.present? && saved_change_to_id?
+    saved_change_to_suitable_experiences?
   end
 
-  # Update JSON field from association
-  def update_suitable_experiences_json
-    write_attribute(:suitable_experiences, experience_types.pluck(:key))
-    save! if persisted? && changed?
+  # Sync JSON cache from relational data (Relация → JSON)
+  # This is the ONLY method that writes to suitable_experiences JSON field
+  # Called automatically after changes to experience_types association
+  def sync_suitable_experiences_cache
+    return unless persisted?
+
+    # Reload association to get fresh data
+    experience_types.reload if experience_types.loaded?
+
+    # Get keys from association (source of truth)
+    keys = experience_types.pluck(:key)
+
+    # Update JSON cache
+    update_column(:suitable_experiences, keys)
+
+    # Clear pending flag
+    @pending_experience_types = nil
   end
 
   # Validate that coordinates are complete (both or neither)

@@ -5,12 +5,9 @@ module Ai
   # Used to retroactively populate missing experience types
   class ExperienceTypeClassifier
     include Concerns::ErrorReporting
+    include PromptHelper
 
     class ClassificationError < StandardError; end
-
-    def initialize
-      @llm = nil
-    end
 
     # Classify a single location and add experience types
     # @param location [Location] Location to classify
@@ -119,58 +116,33 @@ module Ai
       user_prompt = build_classification_prompt(location, hints)
       full_prompt = "#{system_prompt}\n\n#{user_prompt}"
 
-      response = llm.ask(full_prompt)
+      # Use OpenaiQueue for rate limiting and retry logic
+      result = Ai::OpenaiQueue.request(
+        prompt: full_prompt,
+        schema: nil,
+        context: "ExperienceTypeClassifier:#{location.name}"
+      )
 
-      # Parse response
-      content = response.content
-      parse_types_from_response(content)
-    rescue StandardError => e
+      parse_types_from_response(result.to_s)
+    rescue Ai::OpenaiQueue::RequestError => e
       log_error "AI request failed: #{e.message}"
       []
     end
 
     def system_prompt
-      <<~PROMPT
-        You are an experience type classifier for a tourism platform in Bosnia and Herzegovina.
-        Your job is to analyze locations and determine which experience types they are suitable for.
-
-        Available experience types:
-        #{available_types_description}
-
-        Rules:
-        - Choose 1-4 types that best match the location
-        - Be specific and accurate based on location details
-        - Consider the location's category, name, and description
-        - Return only the type keys (e.g., "nature", "culture"), separated by commas
-        - Do not include duplicate or similar types
-
-        Example response: nature, adventure, relaxation
-      PROMPT
+      load_prompt("experience_type_classifier/system.md.erb",
+        available_types: available_types_description)
     end
 
     def build_classification_prompt(location, hints = nil)
-      description_bs = location.translate(:description, :bs)
-      description_en = location.translate(:description, :en)
-
-      hints_text = if hints.present? && hints.any?
-        "\nInitial suggestions: #{hints.join(', ')} (consider these but make your own assessment)"
-      else
-        ""
-      end
-
-      <<~PROMPT
-        Classify this location:
-
-        Name: #{location.name}
-        City: #{location.city}
-        Category: #{location.category_name || location.location_type}
-        #{description_bs.present? ? "Description (BS): #{description_bs.truncate(500)}" : ""}
-        #{description_en.present? ? "Description (EN): #{description_en.truncate(500)}" : ""}
-        #{location.tags.present? ? "Tags: #{location.tags.join(', ')}" : ""}#{hints_text}
-
-        Based on this information, which experience types is this location suitable for?
-        Respond with type keys only, separated by commas.
-      PROMPT
+      load_prompt("experience_type_classifier/classify.md.erb",
+        name: location.name,
+        city: location.city,
+        category: location.category_name,
+        description_bs: location.translate(:description, :bs),
+        description_en: location.translate(:description, :en),
+        tags: location.tags,
+        hints: hints)
     end
 
     def parse_types_from_response(content)
@@ -195,10 +167,6 @@ module Ai
       ExperienceType.active.ordered.map do |et|
         "- #{et.key}: #{et.name}#{et.description.present? ? ' - ' + et.description.truncate(100) : ''}"
       end.join("\n")
-    end
-
-    def llm
-      @llm ||= RubyLLM.chat(model: RubyLLM.config.default_model)
     end
 
     def log_info(message)

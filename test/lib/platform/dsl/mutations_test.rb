@@ -35,7 +35,7 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
   end
 
   test "parses delete command" do
-    ast = Platform::DSL::Parser.parse('delete location { id: 456 }')
+    ast = Platform::DSL::Parser.parse("delete location { id: 456 }")
 
     assert_equal :mutation, ast[:type]
     assert_equal :delete, ast[:action]
@@ -59,17 +59,6 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
     assert_equal "Mostar", location.city
   end
 
-  test "creates audit log on create" do
-    assert_difference "PlatformAuditLog.count", 1 do
-      Platform::DSL.execute('create location { name: "Audit Test", city: "Tuzla", lat: 44.54, lng: 18.67 }')
-    end
-
-    log = PlatformAuditLog.last
-    assert_equal "create", log.action
-    assert_equal "Location", log.record_type
-    assert_equal "platform_dsl", log.triggered_by
-  end
-
   test "rejects create for location outside BiH" do
     error = assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL.execute('create location { name: "Beograd", city: "Beograd", lat: 44.82, lng: 20.45 }')
@@ -80,7 +69,7 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
 
   test "rejects create without required fields" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('create location { lat: 43.85 }')
+      Platform::DSL.execute("create location { lat: 43.85 }")
     end
 
     assert_match(/Nedostaju obavezna polja/i, error.message)
@@ -97,18 +86,6 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
     # Verify update
     @existing_location.reload
     assert_equal "Ažurirani opis", @existing_location.description
-  end
-
-  test "creates audit log on update" do
-    assert_difference "PlatformAuditLog.count", 1 do
-      Platform::DSL.execute("update location { id: #{@existing_location.id} } set { description: \"Novi\" }")
-    end
-
-    log = PlatformAuditLog.last
-    assert_equal "update", log.action
-    assert_equal "Location", log.record_type
-    assert_equal @existing_location.id, log.record_id
-    assert log.change_data["changes"].present?
   end
 
   test "rejects update for non-existent record" do
@@ -141,22 +118,9 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
     assert_nil Location.find_by(id: location.id)
   end
 
-  test "creates audit log on delete" do
-    location = Location.create!(name: "Za brisanje", city: "Zenica")
-
-    assert_difference "PlatformAuditLog.count", 1 do
-      Platform::DSL.execute("delete location { id: #{location.id} }")
-    end
-
-    log = PlatformAuditLog.last
-    assert_equal "delete", log.action
-    assert_equal "Location", log.record_type
-    assert_equal location.id, log.record_id
-  end
-
   test "rejects delete without identifier" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('delete location { }')
+      Platform::DSL.execute("delete location { }")
     end
 
     assert_match(/filter za identifikaciju/i, error.message)
@@ -239,7 +203,7 @@ class Platform::DSL::MutationsTest < ActiveSupport::TestCase
     original_desc = @existing_location.description
     result = Platform::DSL.execute("update location { id: #{@existing_location.id} } set { description: \"New Description\" }")
 
-    assert_equal [original_desc, "New Description"], result[:changes]["description"]
+    assert_equal [ original_desc, "New Description" ], result[:changes]["description"]
   end
 
   test "delete uses soft delete when available" do

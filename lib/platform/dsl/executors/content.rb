@@ -112,19 +112,21 @@ module Platform
               end
             end
 
-            record = model.new(data)
+            # Use LocationCreator service for locations to handle experience types
+            if is_location_table?(table)
+              record = create_location_with_service(data)
+            else
+              record = model.new(data)
 
-            # Mark as AI-generated for models that support this flag
-            if record.respond_to?(:ai_generated=)
-              record.ai_generated = true
+              # Mark as AI-generated for models that support this flag
+              if record.respond_to?(:ai_generated=)
+                record.ai_generated = true
+              end
+
+              unless record.save
+                raise ExecutionError, "Kreiranje nije uspjelo: #{record.errors.full_messages.join(', ')}"
+              end
             end
-
-            unless record.save
-              raise ExecutionError, "Kreiranje nije uspjelo: #{record.errors.full_messages.join(', ')}"
-            end
-
-            PlatformAuditLog.log_create(record, triggered_by: "platform_dsl")
-            PlatformStatistic.invalidate_content_stats
 
             {
               success: true,
@@ -153,17 +155,19 @@ module Platform
               hash[key] = record.send(key) if record.respond_to?(key)
             end
 
-            unless record.update(data)
-              raise ExecutionError, "Ažuriranje nije uspjelo: #{record.errors.full_messages.join(', ')}"
+            # Use LocationUpdater service for locations to handle experience types
+            if is_location_table?(table)
+              update_location_with_service(record, data)
+            else
+              unless record.update(data)
+                raise ExecutionError, "Ažuriranje nije uspjelo: #{record.errors.full_messages.join(', ')}"
+              end
             end
 
             # Build changes hash
             changes = data.keys.each_with_object({}) do |key, hash|
-              hash[key.to_s] = [old_values[key], record.send(key)]
+              hash[key.to_s] = [ old_values[key], record.send(key) ]
             end
-
-            PlatformAuditLog.log_update(record, changes: changes, triggered_by: "platform_dsl")
-            PlatformStatistic.invalidate_content_stats
 
             {
               success: true,
@@ -178,8 +182,6 @@ module Platform
             model = TableQuery.resolve_model(table)
             record = find_record_for_mutation(model, filters)
 
-            PlatformAuditLog.log_delete(record, triggered_by: "platform_dsl")
-
             # Try soft delete first, fall back to hard delete
             if record.respond_to?(:discard)
               record.discard
@@ -188,8 +190,6 @@ module Platform
             else
               record.destroy
             end
-
-            PlatformStatistic.invalidate_content_stats
 
             {
               success: true,
@@ -217,11 +217,11 @@ module Platform
 
           def validate_mutation_data!(table, data, action)
             if is_location_table?(table) && action == :create
-              required = [:name, :city]
+              required = [ :name, :city ]
               missing = required.select { |f| data[f].blank? }
               raise ExecutionError, "Nedostaju obavezna polja: #{missing.join(', ')}" if missing.any?
             elsif is_experience_table?(table) && action == :create
-              required = [:title]
+              required = [ :title ]
               missing = required.select { |f| data[f].blank? }
               raise ExecutionError, "Nedostaju obavezna polja: #{missing.join(', ')}" if missing.any?
             end
@@ -233,6 +233,35 @@ module Platform
 
           def is_experience_table?(table)
             %w[experience experiences].include?(table.to_s.downcase)
+          end
+
+          # Create location using LocationCreator service for explicit experience type handling
+          # @param data [Hash] Location attributes
+          # @return [Location] Created location
+          def create_location_with_service(data)
+            # Ensure ai_generated flag is set
+            attrs = data.merge(ai_generated: true)
+
+            creator = LocationCreator.new(attrs)
+            creator.call
+
+            unless creator.success?
+              raise ExecutionError, "Kreiranje nije uspjelo: #{creator.errors.join(', ')}"
+            end
+
+            creator.location
+          end
+
+          # Update location using LocationUpdater service for explicit experience type handling
+          # @param record [Location] Location to update
+          # @param data [Hash] Attributes to update
+          def update_location_with_service(record, data)
+            updater = LocationUpdater.new(record, data)
+            updater.call
+
+            unless updater.success?
+              raise ExecutionError, "Ažuriranje nije uspjelo: #{updater.errors.join(', ')}"
+            end
           end
 
           # Validate location content before creation (checks for hallucinations, duplicates, etc.)
@@ -304,8 +333,8 @@ module Platform
                   city_lower = city.downcase
 
                   # Check if the address contains the city name (with some flexibility for diacritics)
-                  city_normalized = city_lower.gsub(/[čćžšđ]/, 'c' => 'c', 'ć' => 'c', 'ž' => 'z', 'š' => 's', 'đ' => 'd')
-                  address_normalized = address_lower.gsub(/[čćžšđ]/, 'c' => 'c', 'ć' => 'c', 'ž' => 'z', 'š' => 's', 'đ' => 'd')
+                  city_normalized = city_lower.gsub(/[čćžšđ]/, "c" => "c", "ć" => "c", "ž" => "z", "š" => "s", "đ" => "d")
+                  address_normalized = address_lower.gsub(/[čćžšđ]/, "c" => "c", "ć" => "c", "ž" => "z", "š" => "s", "đ" => "d")
 
                   unless address_normalized.include?(city_normalized) || address_lower.include?(city_lower)
                     Rails.logger.warn "[DSL::Content] Geoapify result for '#{name}' is not in expected city '#{city}'. Address: #{best_match[:address]}. Skipping coordinates."
@@ -332,14 +361,14 @@ module Platform
               all_types = []
               all_types += Array(place_details[:types]) if place_details.present?
               all_types += Array(best_match[:types])
-              all_types += [best_match[:primary_type]] if best_match[:primary_type].present?
+              all_types += [ best_match[:primary_type] ] if best_match[:primary_type].present?
 
               if all_types.present?
                 # Clean up tags - remove dots, underscores, get meaningful parts
                 geoapify_tags = all_types.flat_map do |t|
                   parts = t.to_s.split(".")
                   # Include both full category and last part
-                  [parts.last, parts[-2]].compact.map { |p| p.gsub("_", " ") }
+                  [ parts.last, parts[-2] ].compact.map { |p| p.gsub("_", " ") }
                 end.compact.uniq.reject(&:blank?)
 
                 existing_tags = Array(data[:tags])
@@ -447,12 +476,6 @@ module Platform
             old_description = record.description
             record.update!(description: description)
 
-            PlatformAuditLog.log_update(
-              record,
-              changes: { "description" => [old_description, description] },
-              triggered_by: "platform_dsl_generation"
-            )
-
             {
               success: true,
               action: :generate_description,
@@ -479,7 +502,7 @@ module Platform
             translatable_fields = if record.class.respond_to?(:translatable_fields)
               record.class.translatable_fields
             else
-              [:name, :description].select { |f| record.respond_to?(f) }
+              [ :name, :description ].select { |f| record.respond_to?(f) }
             end
 
             translations_created = []
@@ -496,14 +519,6 @@ module Platform
                 translations_created << { locale: locale, field: field }
               end
             end
-
-            PlatformAuditLog.create!(
-              action: "update",
-              record_type: model.name,
-              record_id: record.id,
-              change_data: { translations_added: translations_created },
-              triggered_by: "platform_dsl_generation"
-            )
 
             {
               success: true,
@@ -550,9 +565,6 @@ module Platform
             locations.each_with_index do |loc, idx|
               experience.experience_locations.create!(location: loc, position: idx + 1)
             end
-
-            PlatformAuditLog.log_create(experience, triggered_by: "platform_dsl_generation")
-            PlatformStatistic.invalidate_content_stats
 
             {
               success: true,
@@ -614,7 +626,7 @@ module Platform
 
             # Use LLM estimate as a sanity check (minimum)
             llm_minutes = (llm_estimate || 0) * 60
-            [calculated_duration, llm_minutes, 60].max # At least 1 hour
+            [ calculated_duration, llm_minutes, 60 ].max # At least 1 hour
           end
 
           # Infer experience seasons from location seasons
@@ -804,14 +816,6 @@ module Platform
             generator = Ai::AudioTourGenerator.new(record)
             result = generator.generate(locale: locale, force: false)
 
-            PlatformAuditLog.create!(
-              action: "create",
-              record_type: "AudioTour",
-              record_id: record.audio_tours.find_by(locale: locale)&.id,
-              change_data: { location_id: record.id, locale: locale },
-              triggered_by: "platform_dsl_audio"
-            )
-
             {
               success: true,
               action: :synthesize_audio,
@@ -850,7 +854,7 @@ module Platform
               total_locations: total_locations,
               estimated_characters: total_chars,
               estimated_cost_usd: estimated_cost.round(2),
-              cost_per_location: (estimated_cost / [total_locations, 1].max).round(2),
+              cost_per_location: (estimated_cost / [ total_locations, 1 ].max).round(2),
               by_city: by_city,
               notes: [
                 "Procjena bazirana na prosječnom skriptu od #{chars_per_tour} karaktera",

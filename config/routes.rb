@@ -85,7 +85,7 @@ Rails.application.routes.draw do
   # Curator dashboard - for curators and admins
   namespace :curator do
     resources :locations do
-      resources :photo_suggestions, only: [:new, :create]
+      resources :photo_suggestions, only: [ :new, :create ]
       collection do
         get :needs_photos
       end
@@ -99,28 +99,28 @@ Rails.application.routes.draw do
         post :add_review
       end
     end
-    resources :photo_suggestions, only: [:index, :show]
+    resources :photo_suggestions, only: [ :index, :show ]
 
     # Admin features for admin users within curator dashboard
     namespace :admin do
-      resources :photo_suggestions, only: [:index, :show] do
+      resources :photo_suggestions, only: [ :index, :show ] do
         member do
           post :approve
           post :reject
         end
       end
-      resources :users, only: [:index, :show, :edit, :update] do
+      resources :users, only: [ :index, :show, :edit, :update ] do
         member do
           post :unblock
         end
       end
-      resources :curator_applications, only: [:index, :show] do
+      resources :curator_applications, only: [ :index, :show ] do
         member do
           post :approve
           post :reject
         end
       end
-      resources :content_changes, only: [:index, :show] do
+      resources :content_changes, only: [ :index, :show ] do
         member do
           post :approve
           post :reject
@@ -129,28 +129,6 @@ Rails.application.routes.draw do
     end
 
     root "dashboard#index"
-  end
-
-
-  # Platform API
-  namespace :api do
-    namespace :platform do
-      # Chat/DSL execution
-      post "chat", to: "chat#create"
-      post "execute", to: "chat#execute"
-      get "parse", to: "chat#parse"
-
-      # Status and health
-      get "status", to: "status#index"
-      get "health", to: "status#health"
-      get "statistics", to: "status#statistics"
-      get "infrastructure", to: "status#infrastructure"
-      get "logs", to: "status#logs"
-
-      # Prompts
-      get "prompts", to: "status#prompts"
-      get "prompts/:id", to: "status#show_prompt"
-    end
   end
 
   # Defines the root path route ("/")

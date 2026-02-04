@@ -182,7 +182,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
   # Aggregate tests
   test "aggregate sum" do
     result = Platform::DSL::Executor.send(:apply_aggregate, Review.all, {
-      args: ["sum", :rating],
+      args: [ "sum", :rating ],
       group_by: nil
     })
 
@@ -192,7 +192,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   test "aggregate avg" do
     result = Platform::DSL::Executor.send(:apply_aggregate, Review.all, {
-      args: ["avg", :rating],
+      args: [ "avg", :rating ],
       group_by: nil
     })
 
@@ -201,7 +201,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   test "aggregate avg with group_by" do
     result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, {
-      args: ["count"],
+      args: [ "count" ],
       group_by: :city
     })
 
@@ -211,7 +211,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
   test "raises error for unknown aggregate function" do
     assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL::Executor.send(:apply_aggregate, Location.all, {
-        args: ["unknown_func"],
+        args: [ "unknown_func" ],
         group_by: nil
       })
     end
@@ -288,46 +288,17 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert result.key?(:service) || result.key?(:status)
   end
 
-  # Cached stats tests
-  test "build_stats returns directly when no cache" do
-    PlatformStatistic.where(key: "layer_zero").delete_all
-
+  # Stats tests (caching removed)
+  test "build_stats returns live data" do
     result = Platform::DSL::Executor.send(:build_stats)
 
     assert_equal :live, result[:source]
   end
 
-  test "format_cached_stats formats data correctly" do
-    data = {
-      "stats" => { "locations" => 100, "users" => 50, "curators" => 5 },
-      "by_city" => { "Sarajevo" => 30 },
-      "coverage" => { "cities" => 10 },
-      "computed_at" => "2024-01-01T00:00:00Z"
-    }
-
-    result = Platform::DSL::Executor.send(:format_cached_stats, data)
-
-    assert_equal :cached, result[:source]
-    assert_equal 100, result[:content]["locations"]
-    assert_equal 50, result[:users][:total]
-  end
-
-  test "format_cached_stats handles symbol keys" do
-    data = {
-      stats: { locations: 100, users: 50, curators: 5 },
-      by_city: { "Sarajevo" => 30 },
-      coverage: { cities: 10 },
-      computed_at: "2024-01-01T00:00:00Z"
-    }
-
-    result = Platform::DSL::Executor.send(:format_cached_stats, data)
-
-    assert_equal :cached, result[:source]
-  end
 
   # Apply filter edge cases
   test "apply_filter with array value" do
-    scope = Platform::DSL::Executor.send(:apply_filter, Location.all, :city, ["Sarajevo", "Mostar"])
+    scope = Platform::DSL::Executor.send(:apply_filter, Location.all, :city, [ "Sarajevo", "Mostar" ])
 
     assert scope.to_sql.include?("IN")
   end
@@ -424,7 +395,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
   end
 
   test "check_storage_health handles errors" do
-    ActiveStorage::Blob.stub(:service, ->{ raise "Storage error" }) do
+    ActiveStorage::Blob.stub(:service, -> { raise "Storage error" }) do
       result = Platform::DSL::Executor.send(:check_storage_health)
 
       assert_equal "error", result[:status]
@@ -454,26 +425,16 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     end
   end
 
-  test "build_stats uses cached data when available" do
-    # Create a fresh cached stat
-    PlatformStatistic.find_or_create_by!(key: "layer_zero").update!(
-      value: {
-        "stats" => { "locations" => 999 },
-        "by_city" => {},
-        "coverage" => {},
-        "computed_at" => Time.current.iso8601
-      },
-      computed_at: 1.minute.ago
-    )
-
+  test "build_stats always returns live data (caching removed)" do
     result = Platform::DSL::Executor.send(:build_stats)
 
-    assert_equal :cached, result[:source]
+    assert_equal :live, result[:source]
+    assert result[:content].is_a?(Hash)
   end
 
   # Apply operation edge cases - test with valid operations only
   test "apply_operation with order operation" do
-    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :order, args: [:name, :asc] })
+    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :order, args: [ :name, :asc ] })
 
     # Should return an ActiveRecord relation
     assert result.is_a?(ActiveRecord::Relation)
@@ -658,65 +619,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert_equal :list_models, result[:action]
   end
 
-  # Prompts query tests
-  test "execute_prompts_query with show" do
-    prompt = PreparedPrompt.create!(
-      title: "Test Prompt",
-      content: "Test content",
-      prompt_type: :fix
-    )
 
-    result = Platform::DSL.execute("prompts { id: #{prompt.id} } | show")
-
-    assert result.is_a?(Hash)
-    assert_equal :show_prompt, result[:action]
-  end
-
-  # Improvement tests
-  test "execute_improvement with prepare fix" do
-    result = Platform::DSL.execute('prepare fix for "Test fix description"')
-
-    assert result.is_a?(Hash)
-    assert_equal :prepare_prompt, result[:action]
-    assert_equal "fix", result[:type]
-  end
-
-  test "execute_improvement with prepare feature" do
-    result = Platform::DSL.execute('prepare feature "Test feature description"')
-
-    assert result.is_a?(Hash)
-    assert_equal :prepare_prompt, result[:action]
-    assert_equal "feature", result[:type]
-  end
-
-  # Prompt action tests (note: only apply and reject are supported)
-  test "execute_prompt_action with apply" do
-    prompt = PreparedPrompt.create!(
-      title: "Apply Test",
-      content: "Test content",
-      prompt_type: :fix,
-      status: :in_progress
-    )
-
-    result = Platform::DSL.execute("apply prompt { id: #{prompt.id} }")
-
-    assert result.is_a?(Hash)
-    assert_equal :apply_prompt, result[:action]
-  end
-
-  test "execute_prompt_action with reject" do
-    prompt = PreparedPrompt.create!(
-      title: "Reject Test",
-      content: "Test content",
-      prompt_type: :fix,
-      status: :pending
-    )
-
-    result = Platform::DSL.execute("reject prompt { id: #{prompt.id} } reason \"Not needed\"")
-
-    assert result.is_a?(Hash)
-    assert_equal :reject_prompt, result[:action]
-  end
 
   # Approval tests
   test "execute_approval approve proposal" do
@@ -774,7 +677,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
   test "get_city_coordinates falls back for unknown city" do
     # Mock geoapify service
     mock_service = Object.new
-    mock_service.define_singleton_method(:text_search) { |**_| [{ lat: 43.0, lng: 18.0 }] }
+    mock_service.define_singleton_method(:text_search) { |**_| [ { lat: 43.0, lng: 18.0 } ] }
 
     Platform::DSL::Executors::External.stub(:geoapify_service, mock_service) do
       result = Platform::DSL::Executor.send(:get_city_coordinates, "UnknownTestCity123")
@@ -839,22 +742,6 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert result.is_a?(Hash)
   end
 
-  # Summaries query via DSL
-  test "execute_summaries_query via DSL" do
-    result = Platform::DSL.execute("summaries { dimension: \"city\" } | list")
-
-    # Returns array of summaries or hash with city summaries
-    assert result.is_a?(Hash) || result.is_a?(Array)
-  end
-
-  # Clusters query via DSL
-  test "execute_clusters_query via DSL" do
-    result = Platform::DSL.execute("clusters | list")
-
-    assert result.is_a?(Hash)
-    assert result.key?(:clusters)
-    assert result.key?(:total)
-  end
 
   # External query via DSL
   test "execute_external_query via DSL" do
@@ -978,19 +865,6 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert result.is_a?(Hash) || result.is_a?(Integer)
   end
 
-  # Prompts count test
-  test "prompts count returns prompt statistics" do
-    result = Platform::DSL.execute("prompts | count")
-
-    assert result.is_a?(Hash) || result.is_a?(Integer)
-  end
-
-  # Summaries issues test
-  test "summaries issues returns summaries with issues" do
-    result = Platform::DSL.execute("summaries | issues")
-
-    assert result.is_a?(Hash) || result.is_a?(Array)
-  end
 
   # Apply filters internal method test
   test "apply_filters filters by column" do
@@ -1095,47 +969,47 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Apply operation - aggregate with sum
   test "apply_aggregate with sum function" do
-    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: ["sum", :id] })
+    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: [ "sum", :id ] })
 
     # Should return a sum value
     assert result.is_a?(Numeric) || result.is_a?(BigDecimal)
   end
 
   test "apply_aggregate with avg function" do
-    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: ["avg", :id] })
+    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: [ "avg", :id ] })
 
     # Should return an average value
     assert result.is_a?(Numeric) || result.is_a?(BigDecimal) || result.nil?
   end
 
   test "apply_aggregate with sum and group_by" do
-    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: ["sum", :id], group_by: :city })
+    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: [ "sum", :id ], group_by: :city })
 
     assert result.is_a?(Hash)
   end
 
   test "apply_aggregate with avg and group_by" do
-    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: ["avg", :id], group_by: :city })
+    result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: [ "avg", :id ], group_by: :city })
 
     assert result.is_a?(Hash)
   end
 
   test "apply_aggregate raises for unknown function" do
     assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: ["unknown_func"] })
+      Platform::DSL::Executor.send(:apply_aggregate, Location.all, { name: :aggregate, args: [ "unknown_func" ] })
     end
   end
 
   # Apply operation - select
   test "apply_operation with select" do
-    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :select, args: [:name, :city] })
+    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :select, args: [ :name, :city ] })
 
     assert result.is_a?(ActiveRecord::Relation)
   end
 
   # Apply operation - limit with argument
   test "apply_operation limit with specific number" do
-    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :limit, args: [5] })
+    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :limit, args: [ 5 ] })
 
     assert result.is_a?(Array)
     assert result.length <= 5
@@ -1164,24 +1038,18 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert result.key?(:curators)
   end
 
-  # Logs with filter
-  test "logs with action filter" do
-    PlatformAuditLog.create!(
-      action: "create",
-      record_type: "Location",
-      record_id: 1,
-      triggered_by: "test"
-    )
-
+  # Logs with filter - removed (audit logging no longer exists)
+  test "logs with action filter returns message" do
     result = Platform::DSL.execute('logs { action: "create" } | list')
 
-    assert result.is_a?(Hash) || result.is_a?(Array)
+    assert result.is_a?(Hash)
+    assert_includes result[:message], "removed" if result.key?(:message)
   end
 
   # External geocode operation
   test "geocode_address returns hash for valid address" do
     mock_service = Object.new
-    mock_service.define_singleton_method(:text_search) { |**_| [{ name: "Test", lat: 43.85, lng: 18.41, primary_type: "poi" }] }
+    mock_service.define_singleton_method(:text_search) { |**_| [ { name: "Test", lat: 43.85, lng: 18.41, primary_type: "poi" } ] }
 
     Platform::DSL::Executors::External.stub(:geoapify_service, mock_service) do
       Ai::RateLimiter.stub(:with_delay, ->(**_opts, &block) { block.call }) do
@@ -1252,7 +1120,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test execute_schema_query with unknown operation
   test "execute_schema_query raises for unknown operation" do
-    ast = { operations: [{ name: :unknown_schema_op }] }
+    ast = { operations: [ { name: :unknown_schema_op } ] }
 
     assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL::Executor.send(:execute_schema_query, ast)
@@ -1286,40 +1154,13 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert true
   end
 
-  # Test summaries with different dimension
-  test "summaries with dimension city" do
-    result = Platform::DSL.execute('summaries { dimension: "city" } | list')
 
-    assert result.is_a?(Hash) || result.is_a?(Array)
-  end
-
-  # Test prompts | show
-  test "prompts show requires filter" do
-    # Create a prompt first
-    prompt = PreparedPrompt.create!(
-      title: "Test Prompt",
-      content: "Test content",
-      prompt_type: :fix,
-      status: :pending
-    )
-
-    result = Platform::DSL.execute("prompts { id: #{prompt.id} } | show")
+  # Test logs | show - removed (audit logging no longer exists)
+  test "logs show returns message about removed functionality" do
+    result = Platform::DSL.execute("logs | recent")
 
     assert result.is_a?(Hash)
-  end
-
-  # Test logs | show
-  test "logs show returns log details" do
-    log = PlatformAuditLog.create!(
-      action: "create",
-      record_type: "Location",
-      record_id: 1,
-      triggered_by: "test"
-    )
-
-    result = Platform::DSL.execute("logs { id: #{log.id} } | show")
-
-    assert result.is_a?(Hash)
+    assert result.key?(:message) || result.key?(:action)
   end
 
   # Test applications | list
@@ -1398,7 +1239,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_operation with where
   test "apply_operation with where" do
-    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :where, args: ["id > 0"] })
+    result = Platform::DSL::Executor.send(:apply_operation, Location.all, { name: :where, args: [ "id > 0" ] })
 
     assert result.is_a?(ActiveRecord::Relation) || result.is_a?(Array)
   end
@@ -1560,55 +1401,24 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     assert result[:errors].is_a?(Array)
   end
 
-  # Test show_audit_logs
-  test "show_audit_logs returns audit log information" do
-    PlatformAuditLog.create!(
-      action: "create",
-      record_type: "Location",
-      record_id: 1,
-      triggered_by: "test"
-    )
-
-    result = Platform::DSL::Executor.send(:show_audit_logs, {})
+  # Test show_audit_logs - removed (audit logging no longer exists)
+  test "show_audit_logs returns message about removed functionality" do
+    result = Platform::DSL::Executors::Infrastructure.send(:show_audit_logs, {})
 
     assert result.is_a?(Hash)
     assert_equal :audit_logs, result[:action]
-    assert result.key?(:logs)
-    assert result[:logs].is_a?(Array)
+    assert_includes result[:message], "removed"
   end
 
-  # Test show_dsl_logs
-  test "show_dsl_logs returns DSL triggered logs" do
-    PlatformAuditLog.create!(
-      action: "create",
-      record_type: "Location",
-      record_id: 1,
-      triggered_by: "platform_dsl_test"
-    )
-
-    result = Platform::DSL::Executor.send(:show_dsl_logs, {})
+  # Test show_dsl_logs - removed (audit logging no longer exists)
+  test "show_dsl_logs returns message about removed functionality" do
+    result = Platform::DSL::Executors::Infrastructure.send(:show_dsl_logs, {})
 
     assert result.is_a?(Hash)
     assert_equal :dsl_logs, result[:action]
-    assert result.key?(:logs)
+    assert_includes result[:message], "removed"
   end
 
-  # Test show_recent_logs
-  test "show_recent_logs returns recent logs" do
-    result = Platform::DSL::Executor.send(:show_recent_logs, {})
-
-    assert result.is_a?(Hash)
-    assert_equal :recent_logs, result[:action]
-    assert result.key?(:logs)
-  end
-
-  # Test show_recent_logs with limit
-  test "show_recent_logs respects limit filter" do
-    result = Platform::DSL::Executor.send(:show_recent_logs, { limit: 10 })
-
-    assert result.is_a?(Hash)
-    assert result[:logs].length <= 10
-  end
 
   # Test apply_operation with where
   test "apply_operation handles where operation" do
@@ -1616,7 +1426,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
     Location.create!(name: "High Rated", city: "Sarajevo", lat: 43.85, lng: 18.41, average_rating: 4.5)
     Location.create!(name: "Low Rated", city: "Sarajevo", lat: 43.86, lng: 18.42, average_rating: 2.5)
 
-    operation = { name: :where, args: ["average_rating > 4"] }
+    operation = { name: :where, args: [ "average_rating > 4" ] }
     result = Platform::DSL::Executor.send(:apply_operation, Location.all, operation)
 
     assert result.is_a?(ActiveRecord::Relation)
@@ -1624,7 +1434,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_operation with select
   test "apply_operation handles select operation" do
-    operation = { name: :select, args: [:id, :name] }
+    operation = { name: :select, args: [ :id, :name ] }
     result = Platform::DSL::Executor.send(:apply_operation, Location.all, operation)
 
     assert result.is_a?(ActiveRecord::Relation)
@@ -1632,7 +1442,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_aggregate without group_by for count
   test "apply_aggregate handles count without group_by" do
-    operation = { name: :aggregate, args: ["count"], group_by: nil }
+    operation = { name: :aggregate, args: [ "count" ], group_by: nil }
     result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, operation)
 
     assert result.is_a?(Integer)
@@ -1640,7 +1450,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_aggregate with sum
   test "apply_aggregate handles sum with field" do
-    operation = { name: :aggregate, args: ["sum", "reviews_count"], group_by: nil }
+    operation = { name: :aggregate, args: [ "sum", "reviews_count" ], group_by: nil }
     result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, operation)
 
     assert result.is_a?(Numeric)
@@ -1648,7 +1458,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_aggregate with avg
   test "apply_aggregate handles avg with field" do
-    operation = { name: :aggregate, args: ["avg", "average_rating"], group_by: nil }
+    operation = { name: :aggregate, args: [ "avg", "average_rating" ], group_by: nil }
     result = Platform::DSL::Executor.send(:apply_aggregate, Location.all, operation)
 
     assert result.is_a?(Numeric) || result.nil?
@@ -1691,7 +1501,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test schema describe with no table raises error
   test "execute_schema_query describe without table raises error" do
-    ast = { operations: [{ name: :describe, args: nil }] }
+    ast = { operations: [ { name: :describe, args: nil } ] }
 
     assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL::Executor.send(:execute_schema_query, ast)
@@ -1700,7 +1510,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_operation sample with explicit limit
   test "apply_operation sample uses provided limit" do
-    operation = { name: :sample, args: [3] }
+    operation = { name: :sample, args: [ 3 ] }
     result = Platform::DSL::Executor.send(:apply_operation, Location.all, operation)
 
     assert result.is_a?(Array)
@@ -1709,7 +1519,7 @@ class Platform::DSL::ExecutorTest < ActiveSupport::TestCase
 
   # Test apply_operation sort with field and direction
   test "apply_operation sort with field and direction" do
-    operation = { name: :sort, args: [:name, :desc] }
+    operation = { name: :sort, args: [ :name, :desc ] }
     result = Platform::DSL::Executor.send(:apply_operation, Location.all, operation)
 
     assert result.is_a?(ActiveRecord::Relation)

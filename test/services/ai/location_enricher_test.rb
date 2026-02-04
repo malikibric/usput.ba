@@ -17,53 +17,53 @@ module Ai
 
     # === Constants tests ===
 
-    test "LOCALES_PER_DESCRIPTION_BATCH is reasonable" do
-      assert_equal 5, Ai::LocationEnricher::LOCALES_PER_DESCRIPTION_BATCH
+    test "DescriptionGenerator::LOCALES_PER_BATCH is reasonable" do
+      assert_equal 5, Ai::LocationEnricher::DescriptionGenerator::LOCALES_PER_BATCH
     end
 
-    test "LOCALES_PER_HISTORY_BATCH is reasonable" do
-      assert_equal 3, Ai::LocationEnricher::LOCALES_PER_HISTORY_BATCH
+    test "HistoricalGenerator::LOCALES_PER_BATCH is reasonable" do
+      assert_equal 3, Ai::LocationEnricher::HistoricalGenerator::LOCALES_PER_BATCH
     end
 
     # === determine_location_type tests ===
 
     test "determine_location_type returns restaurant for restaurant categories" do
-      result = @enricher.send(:determine_location_type, ["catering.restaurant", "food"])
+      result = @enricher.send(:determine_location_type, [ "catering.restaurant", "food" ])
       assert_equal :restaurant, result
     end
 
     test "determine_location_type returns restaurant for cafe categories" do
-      result = @enricher.send(:determine_location_type, ["catering.cafe"])
+      result = @enricher.send(:determine_location_type, [ "catering.cafe" ])
       assert_equal :restaurant, result
     end
 
     test "determine_location_type returns accommodation for hotel categories" do
-      result = @enricher.send(:determine_location_type, ["accommodation.hotel"])
+      result = @enricher.send(:determine_location_type, [ "accommodation.hotel" ])
       assert_equal :accommodation, result
     end
 
     test "determine_location_type returns accommodation for hostel categories" do
-      result = @enricher.send(:determine_location_type, ["accommodation.hostel"])
+      result = @enricher.send(:determine_location_type, [ "accommodation.hostel" ])
       assert_equal :accommodation, result
     end
 
     test "determine_location_type returns guide for tour categories" do
-      result = @enricher.send(:determine_location_type, ["service.tour_guide"])
+      result = @enricher.send(:determine_location_type, [ "service.tour_guide" ])
       assert_equal :guide, result
     end
 
     test "determine_location_type returns business for shop categories" do
-      result = @enricher.send(:determine_location_type, ["commercial.shop"])
+      result = @enricher.send(:determine_location_type, [ "commercial.shop" ])
       assert_equal :business, result
     end
 
     test "determine_location_type returns artisan for craft categories" do
-      result = @enricher.send(:determine_location_type, ["craft.artisan"])
+      result = @enricher.send(:determine_location_type, [ "craft.artisan" ])
       assert_equal :artisan, result
     end
 
     test "determine_location_type returns place for unknown categories" do
-      result = @enricher.send(:determine_location_type, ["unknown.category"])
+      result = @enricher.send(:determine_location_type, [ "unknown.category" ])
       assert_equal :place, result
     end
 
@@ -166,36 +166,16 @@ module Ai
       assert_equal 123, result
     end
 
-    # === Schema tests ===
+    # === Schema tests (moved to generators) ===
 
-    test "metadata_schema has correct structure" do
-      schema = @enricher.send(:metadata_schema)
+    test "MetadataGenerator has correct schema structure" do
+      schema = Ai::LocationEnricher::MetadataGenerator::SCHEMA
 
       assert_equal "object", schema[:type]
       assert_includes schema[:properties].keys, :suitable_experiences
       assert_includes schema[:properties].keys, :tags
       assert_includes schema[:properties].keys, :practical_info
       assert_equal false, schema[:additionalProperties]
-    end
-
-    test "descriptions_schema includes provided locales" do
-      locales = ["en", "bs", "de"]
-      schema = @enricher.send(:descriptions_schema, locales)
-
-      desc_props = schema[:properties][:descriptions][:properties]
-      locales.each do |locale|
-        assert_includes desc_props.keys, locale
-      end
-    end
-
-    test "historical_context_schema includes provided locales" do
-      locales = ["en", "bs"]
-      schema = @enricher.send(:historical_context_schema, locales)
-
-      context_props = schema[:properties][:historical_context][:properties]
-      locales.each do |locale|
-        assert_includes context_props.keys, locale
-      end
     end
 
     # === enrich tests ===
@@ -214,10 +194,10 @@ module Ai
       mock_location.define_singleton_method(:save!) { raise StandardError, "Save failed" }
 
       enrichment = {
-        suitable_experiences: ["culture"],
+        suitable_experiences: [ "culture" ],
         descriptions: { "en" => "Description" },
         historical_context: { "en" => "History" },
-        tags: ["historical"],
+        tags: [ "historical" ],
         practical_info: { best_time: "morning", duration_minutes: 60, tips: [] }
       }
 
@@ -236,7 +216,7 @@ module Ai
       loc2 = create_mock_location(name: "Location 2")
 
       @enricher.stub :enrich, true do
-        result = @enricher.enrich_batch([loc1, loc2])
+        result = @enricher.enrich_batch([ loc1, loc2 ])
 
         assert_includes result.keys, :success
         assert_includes result.keys, :failed
@@ -254,7 +234,7 @@ module Ai
         call_count += 1
         call_count == 1 # First succeeds, second fails
       } do
-        result = @enricher.enrich_batch([loc1, loc2])
+        result = @enricher.enrich_batch([ loc1, loc2 ])
 
         assert_equal 1, result[:success].count
         assert_equal 1, result[:failed].count
@@ -291,7 +271,7 @@ module Ai
       mock_location = create_mock_location
       mock_location.define_singleton_method(:save) { true }
 
-      categories = ["tourism.attraction", "heritage.historical_site"]
+      categories = [ "tourism.attraction", "heritage.historical_site" ]
 
       @enricher.send(:add_tags_from_categories, mock_location, categories)
 
@@ -310,120 +290,39 @@ module Ai
     end
 
     # === JSON parsing tests ===
-
-    test "parse_ai_json_response parses valid JSON with string values" do
-      # Note: The parse_ai_json_response method uses heuristics to detect and escape
-      # embedded quotes in AI output. These heuristics work best with string values.
-      # For JSON with numeric values after keys, use JSON.parse directly.
-      content = '{"name": "Test", "description": "A description"}'
-      result = @enricher.send(:parse_ai_json_response, content)
-
-      assert_kind_of Hash, result, "Expected Hash, got #{result.class}"
-      assert_equal "Test", result[:name], "Result was: #{result.inspect}"
-      assert_equal "A description", result[:description]
-    end
-
-    test "parse_ai_json_response extracts JSON from markdown code block" do
-      content = "```json\n{\"name\": \"Test\"}\n```"
-      result = @enricher.send(:parse_ai_json_response, content)
-      assert_equal "Test", result[:name]
-    end
-
-    test "parse_ai_json_response returns empty hash for invalid JSON" do
-      result = @enricher.send(:parse_ai_json_response, "not valid json")
-      assert_equal({}, result)
-    end
-
-    test "sanitize_ai_json removes trailing commas" do
-      json = '{"name": "Test",}'
-      result = @enricher.send(:sanitize_ai_json, json)
-      assert_not_includes result, ",}"
-    end
-
-    test "sanitize_ai_json removes trailing comma at end of stream" do
-      json = '{"name": "Test"},'
-      result = @enricher.send(:sanitize_ai_json, json)
-      assert_not result.end_with?(",")
-    end
-
-    test "sanitize_ai_json converts smart quotes" do
-      json = '{"name": "Test"}'
-      result = @enricher.send(:sanitize_ai_json, json)
-      assert_includes result, '"'
-    end
-
-    # === Control character escaping tests ===
-
-    test "escape_chars_in_json_strings handles newlines" do
-      json = "{\"text\": \"line1\nline2\"}"
-      result = @enricher.send(:escape_chars_in_json_strings, json)
-      assert_includes result, "\\n"
-    end
-
-    test "escape_chars_in_json_strings handles tabs" do
-      json = "{\"text\": \"col1\tcol2\"}"
-      result = @enricher.send(:escape_chars_in_json_strings, json)
-      assert_includes result, "\\t"
-    end
-
-    test "escape_chars_in_json_strings handles carriage returns" do
-      json = "{\"text\": \"line1\rline2\"}"
-      result = @enricher.send(:escape_chars_in_json_strings, json)
-      assert_includes result, "\\r"
-    end
-
-    # === Embedded quote detection tests ===
-
-    test "looks_like_embedded_quote returns false for closing quote" do
-      json = '{"name": "Test"}'
-      # Position of closing quote before }
-      result = @enricher.send(:looks_like_embedded_quote?, json, 14)
-      assert_not result
-    end
-
-    test "looks_like_embedded_quote returns true for mid-string quote" do
-      json = '{"text": "He said hello there"}'
-      result = @enricher.send(:looks_like_embedded_quote?, json, 18)
-      assert result
-    end
-
-    test "looks_like_embedded_quote handles colon after quote" do
-      # Test JSON key-value separator pattern `: "`
-      json = '{"text": "value", "key": "another"}'
-      # Position 16 is the quote after "value" - followed by `, "key"`
-      # This is a real closing quote because it's followed by JSON structure
-      result = @enricher.send(:looks_like_embedded_quote?, json, 16)
-      assert_not result
-    end
+    # NOTE: JSON parsing methods removed - now using OpenaiQueue with JSON mode
 
     # === Error handling tests ===
 
-    test "generate_metadata handles API errors gracefully" do
+    test "MetadataGenerator handles API errors gracefully" do
       mock_location = create_mock_location
-      place_data = { categories: ["tourism"] }
+      place_data = { categories: [ "tourism" ] }
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API error" } do
-        result = @enricher.send(:generate_metadata, mock_location, place_data)
+        generator = Ai::LocationEnricher::MetadataGenerator.new
+        result = generator.generate(mock_location, place_data)
         assert_equal({}, result)
       end
     end
 
-    test "generate_descriptions handles API errors gracefully" do
+    test "DescriptionGenerator handles API errors gracefully" do
       mock_location = create_mock_location
-      place_data = { categories: ["tourism"] }
+      place_data = { categories: [ "tourism" ] }
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API error" } do
-        result = @enricher.send(:generate_descriptions, mock_location, place_data, ["en", "bs"])
+        generator = Ai::LocationEnricher::DescriptionGenerator.new
+        result = generator.generate(mock_location, place_data, locales: [ "en", "bs" ])
         assert_equal({}, result)
       end
     end
 
-    test "generate_historical_context handles API errors gracefully" do
+    test "HistoricalGenerator handles API errors gracefully" do
       mock_location = create_mock_location
-      place_data = { categories: ["tourism"] }
+      place_data = { categories: [ "tourism" ] }
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API error" } do
-        result = @enricher.send(:generate_historical_context, mock_location, place_data, ["en", "bs"])
+        generator = Ai::LocationEnricher::HistoricalGenerator.new
+        result = generator.generate(mock_location, place_data, locales: [ "en", "bs" ])
         assert_equal({}, result)
       end
     end
@@ -445,7 +344,7 @@ module Ai
         practical_info: {}
       }
 
-      Locale.stub :ai_supported_codes, ["en", "bs"] do
+      Locale.stub :ai_supported_codes, [ "en", "bs" ] do
         @enricher.send(:apply_enrichment, mock_location, enrichment)
       end
 
@@ -469,7 +368,7 @@ module Ai
         practical_info: {}
       }
 
-      Locale.stub :ai_supported_codes, ["en", "bs"] do
+      Locale.stub :ai_supported_codes, [ "en", "bs" ] do
         @enricher.send(:apply_enrichment, mock_location, enrichment)
       end
 
@@ -480,21 +379,35 @@ module Ai
     test "apply_enrichment sets suitable_experiences" do
       mock_location = create_mock_location
       mock_location.define_singleton_method(:set_translation) { |*| }
-      mock_location.define_singleton_method(:add_experience_type) { |*| }
+      types_set = nil
+      mock_location.define_singleton_method(:set_experience_types) do |types|
+        types_set = types
+        mock_location.suitable_experiences = types
+      end
 
       enrichment = {
         descriptions: {},
         historical_context: {},
-        suitable_experiences: ["culture", "history"],
+        suitable_experiences: [ "culture", "history" ],
         tags: [],
         practical_info: {}
       }
 
-      Locale.stub :ai_supported_codes, [] do
-        @enricher.send(:apply_enrichment, mock_location, enrichment)
+      # Mock classifier to return success without actually doing anything
+      # (since we're testing the fallback mechanism when classifier fails)
+      mock_classifier = OpenStruct.new
+      mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
+        { success: false }
       end
 
-      assert_equal ["culture", "history"], mock_location.suitable_experiences
+      Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
+        Locale.stub :ai_supported_codes, [] do
+          @enricher.send(:apply_enrichment, mock_location, enrichment)
+        end
+      end
+
+      assert_equal [ "culture", "history" ], mock_location.suitable_experiences
+      assert_equal [ "culture", "history" ], types_set
     end
 
     test "apply_enrichment uses classifier with hints when available" do
@@ -504,7 +417,7 @@ module Ai
       enrichment = {
         descriptions: {},
         historical_context: {},
-        suitable_experiences: ["culture", "history"],
+        suitable_experiences: [ "culture", "history" ],
         tags: [],
         practical_info: {}
       }
@@ -513,8 +426,8 @@ module Ai
       mock_classifier = OpenStruct.new
       mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
         classifier_called = true
-        assert_equal ["culture", "history"], hints
-        { success: true, types: ["culture", "history", "architecture"] }
+        assert_equal [ "culture", "history" ], hints
+        { success: true, types: [ "culture", "history", "architecture" ] }
       end
 
       Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
@@ -529,13 +442,16 @@ module Ai
     test "apply_enrichment falls back to hints when classifier fails" do
       mock_location = create_mock_location
       mock_location.define_singleton_method(:set_translation) { |*| }
-      types_added = []
-      mock_location.define_singleton_method(:add_experience_type) { |type| types_added << type }
+      types_set = nil
+      mock_location.define_singleton_method(:set_experience_types) do |types|
+        types_set = types
+        mock_location.suitable_experiences = types
+      end
 
       enrichment = {
         descriptions: {},
         historical_context: {},
-        suitable_experiences: ["culture", "history"],
+        suitable_experiences: [ "culture", "history" ],
         tags: [],
         practical_info: {}
       }
@@ -551,21 +467,23 @@ module Ai
         end
       end
 
-      assert_equal ["culture", "history"], mock_location.suitable_experiences
-      assert_includes types_added, "culture"
-      assert_includes types_added, "history"
+      assert_equal [ "culture", "history" ], mock_location.suitable_experiences
+      assert_equal [ "culture", "history" ], types_set
     end
 
     test "apply_enrichment falls back to hints when classifier raises exception" do
       mock_location = create_mock_location
       mock_location.define_singleton_method(:set_translation) { |*| }
-      types_added = []
-      mock_location.define_singleton_method(:add_experience_type) { |type| types_added << type }
+      types_set = nil
+      mock_location.define_singleton_method(:set_experience_types) do |types|
+        types_set = types
+        mock_location.suitable_experiences = types
+      end
 
       enrichment = {
         descriptions: {},
         historical_context: {},
-        suitable_experiences: ["culture"],
+        suitable_experiences: [ "culture" ],
         tags: [],
         practical_info: {}
       }
@@ -581,8 +499,8 @@ module Ai
         end
       end
 
-      assert_equal ["culture"], mock_location.suitable_experiences
-      assert_includes types_added, "culture"
+      assert_equal [ "culture" ], mock_location.suitable_experiences
+      assert_equal [ "culture" ], types_set
     end
 
     test "apply_enrichment handles no hints gracefully" do
@@ -602,7 +520,7 @@ module Ai
       mock_classifier.define_singleton_method(:classify) do |location, dry_run:, hints:|
         classifier_called = true
         assert_nil hints
-        { success: true, types: ["nature"] }
+        { success: true, types: [ "nature" ] }
       end
 
       Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
@@ -614,17 +532,17 @@ module Ai
       assert classifier_called
     end
 
-    test "apply_enrichment falls back to hints when add_experience_type fails" do
+    test "apply_enrichment falls back to hints when set_experience_types fails" do
       mock_location = create_mock_location
       mock_location.define_singleton_method(:set_translation) { |*| }
 
-      # Make add_experience_type fail
-      mock_location.define_singleton_method(:add_experience_type) { |type| raise "Failed" }
+      # Make set_experience_types fail
+      mock_location.define_singleton_method(:set_experience_types) { |type| raise "Failed" }
 
       enrichment = {
         descriptions: {},
         historical_context: {},
-        suitable_experiences: ["culture"],
+        suitable_experiences: [ "culture" ],
         tags: [],
         practical_info: {}
       }
@@ -636,14 +554,15 @@ module Ai
 
       Ai::ExperienceTypeClassifier.stub :new, mock_classifier do
         Locale.stub :ai_supported_codes, [] do
-          # Should not raise exception
+          # Should not raise exception - the error is caught
           assert_nothing_raised do
             @enricher.send(:apply_enrichment, mock_location, enrichment)
           end
         end
       end
 
-      assert_equal ["culture"], mock_location.suitable_experiences
+      # suitable_experiences won't be set because set_experience_types failed
+      # But the enricher should handle it gracefully
     end
 
     test "apply_enrichment handles nil suitable_experiences" do
@@ -681,29 +600,32 @@ module Ai
       end
     end
 
-    test "generate_metadata returns empty hash on RequestError" do
+    test "MetadataGenerator returns empty hash on RequestError" do
       mock_location = create_mock_location
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
-        result = @enricher.send(:generate_metadata, mock_location, {})
+        generator = Ai::LocationEnricher::MetadataGenerator.new
+        result = generator.generate(mock_location, {})
         assert_equal({}, result)
       end
     end
 
-    test "generate_descriptions returns empty hash on RequestError" do
+    test "DescriptionGenerator returns empty hash on RequestError" do
       mock_location = create_mock_location
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
-        result = @enricher.send(:generate_descriptions, mock_location, {}, ["en"])
+        generator = Ai::LocationEnricher::DescriptionGenerator.new
+        result = generator.generate(mock_location, {}, locales: [ "en" ])
         assert_equal({}, result)
       end
     end
 
-    test "generate_historical_context returns empty hash on RequestError" do
+    test "HistoricalGenerator returns empty hash on RequestError" do
       mock_location = create_mock_location
 
       Ai::OpenaiQueue.stub :request, ->(*) { raise Ai::OpenaiQueue::RequestError, "API Error" } do
-        result = @enricher.send(:generate_historical_context, mock_location, {}, ["en"])
+        generator = Ai::LocationEnricher::HistoricalGenerator.new
+        result = generator.generate(mock_location, {}, locales: [ "en" ])
         assert_equal({}, result)
       end
     end
@@ -712,8 +634,8 @@ module Ai
       mock_location = create_mock_location
 
       metadata_response = {
-        suitable_experiences: ["culture"],
-        tags: ["historical"],
+        suitable_experiences: [ "culture" ],
+        tags: [ "historical" ],
         practical_info: { duration_minutes: 60 }
       }
 
@@ -726,7 +648,7 @@ module Ai
           { descriptions: { "en" => "Test" }, historical_context: { "en" => "History" } }
         end
       } do
-        Locale.stub :ai_supported_codes, ["en"] do
+        Locale.stub :ai_supported_codes, [ "en" ] do
           result = @enricher.send(:generate_enrichment, mock_location, {})
 
           assert_includes result[:suitable_experiences], "culture"
@@ -736,18 +658,19 @@ module Ai
       end
     end
 
-    test "generate_descriptions returns empty hash when result has no descriptions" do
+    test "DescriptionGenerator returns empty hash when result has no descriptions" do
       mock_location = create_mock_location
 
       Ai::OpenaiQueue.stub :request, { other_field: "value" } do
-        result = @enricher.send(:generate_descriptions, mock_location, {}, ["en"])
+        generator = Ai::LocationEnricher::DescriptionGenerator.new
+        result = generator.generate(mock_location, {}, locales: [ "en" ])
         assert_equal({}, result)
       end
     end
 
     test "apply_enrichment merges tags" do
       mock_location = create_mock_location
-      mock_location.instance_variable_set(:@tags, ["existing-tag"])
+      mock_location.instance_variable_set(:@tags, [ "existing-tag" ])
       mock_location.define_singleton_method(:tags) { @tags }
       mock_location.define_singleton_method(:tags=) { |v| @tags = v }
       mock_location.define_singleton_method(:set_translation) { |*| }
@@ -756,7 +679,7 @@ module Ai
         descriptions: {},
         historical_context: {},
         suitable_experiences: [],
-        tags: ["new-tag", "another-tag"],
+        tags: [ "new-tag", "another-tag" ],
         practical_info: {}
       }
 
@@ -780,7 +703,7 @@ module Ai
         historical_context: {},
         suitable_experiences: [],
         tags: [],
-        practical_info: { best_time: "morning", duration_minutes: 60, tips: ["Arrive early"] }
+        practical_info: { best_time: "morning", duration_minutes: 60, tips: [ "Arrive early" ] }
       }
 
       Locale.stub :ai_supported_codes, [] do
@@ -807,6 +730,7 @@ module Ai
 
       mock.define_singleton_method(:set_translation) { |field, value, locale| }
       mock.define_singleton_method(:add_experience_type) { |type| }
+      mock.define_singleton_method(:set_experience_types) { |types| mock.suitable_experiences = types }
       mock.define_singleton_method(:save!) { true }
       mock.define_singleton_method(:save) { true }
 

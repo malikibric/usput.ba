@@ -10,8 +10,15 @@ module Curator
       @locations = @locations.by_city(params[:city_name]) if params[:city_name].present?
       @locations = @locations.by_category(params[:category]) if params[:category].present?
       @locations = @locations.where("locations.name ILIKE ?", "%#{params[:search]}%") if params[:search].present?
-      @locations = @locations.page(params[:page]).per(20)
-      @city_names = Location.where.not(city: [nil, ""]).distinct.pluck(:city).sort
+
+      page = params[:items_page] || params[:page] || 1
+      @locations = @locations.page(page).per(3)
+
+      if params[:partial] == "items" && request.xhr?
+        return render partial: "curator/locations/location_items", locals: { locations: @locations }, layout: false
+      end
+
+      @city_names = Location.where.not(city: [ nil, "" ]).distinct.pluck(:city).sort
       @location_categories = LocationCategory.active.ordered
 
       # Show pending proposals for this curator
@@ -39,7 +46,7 @@ module Curator
       end
 
       @locations = @locations.page(params[:page]).per(30)
-      @city_names = Location.where.not(city: [nil, ""]).distinct.pluck(:city).sort
+      @city_names = Location.where.not(city: [ nil, "" ]).distinct.pluck(:city).sort
     end
 
     def show
@@ -125,7 +132,7 @@ module Curator
     end
 
     def editable_attributes
-      %w[name description historical_context city lat lng location_type budget phone email website video_url tags suitable_experiences social_links]
+      %w[name description historical_context city lat lng budget phone email website video_url tags suitable_experiences social_links]
     end
 
     def build_original_data
@@ -143,6 +150,12 @@ module Curator
         data["location_category_ids"] = params[:location][:location_category_ids].reject(&:blank?).map(&:to_i)
       end
 
+      # Include experience type keys (for proposal system compatibility)
+      # Note: The actual sync happens via set_experience_types when proposal is applied
+      if params[:location][:suitable_experiences].present?
+        data["suitable_experiences"] = params[:location][:suitable_experiences].reject(&:blank?)
+      end
+
       # Note: File attachments (photos, audio) are not included in proposals
       # They would need to be added after approval or handled separately
 
@@ -152,7 +165,7 @@ module Curator
     def location_params
       permitted = params.require(:location).permit(
         :name, :description, :historical_context, :city,
-        :lat, :lng, :location_type, :budget,
+        :lat, :lng, :budget,
         :phone, :email, :website, :video_url,
         :tags_input,
         suitable_experiences: [],
@@ -175,7 +188,7 @@ module Curator
     end
 
     def load_form_options
-      @city_names = Location.where.not(city: [nil, ""]).distinct.pluck(:city).sort
+      @city_names = Location.where.not(city: [ nil, "" ]).distinct.pluck(:city).sort
       @experience_types = ExperienceType.where(active: true).order(:position)
       @location_categories = LocationCategory.active.ordered
     end

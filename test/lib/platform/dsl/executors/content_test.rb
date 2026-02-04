@@ -232,7 +232,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
       result = Platform::DSL::Executors::Content.send(:generate_translations, {
         table: "experiences",
         filters: { id: @experience.id },
-        locales: ["en"]
+        locales: [ "en" ]
       })
 
       assert result[:success]
@@ -245,7 +245,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
       Platform::DSL::Executors::Content.send(:generate_translations, {
         table: "users",
         filters: { id: @user.id },
-        locales: ["en"]
+        locales: [ "en" ]
       })
     end
 
@@ -257,7 +257,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
       Platform::DSL::Executors::Content.send(:generate_translations, {
         table: "locations",
         filters: { id: @location.id },
-        locales: ["invalid_locale_xyz"]
+        locales: [ "invalid_locale_xyz" ]
       })
     end
 
@@ -269,7 +269,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
       Platform::DSL::Executors::Content.send(:generate_translations, {
         table: "locations",
         filters: { id: 999999 },
-        locales: ["en"]
+        locales: [ "en" ]
       })
     end
 
@@ -280,7 +280,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
   test "generate_experience raises for single location" do
     error = assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL::Executors::Content.send(:generate_experience, {
-        location_ids: [@location.id]
+        location_ids: [ @location.id ]
       })
     end
 
@@ -290,7 +290,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
   test "generate_experience raises for non-existent locations" do
     error = assert_raises(Platform::DSL::ExecutionError) do
       Platform::DSL::Executors::Content.send(:generate_experience, {
-        location_ids: [999998, 999999]
+        location_ids: [ 999998, 999999 ]
       })
     end
 
@@ -631,16 +631,15 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
 
   test "build_description_prompt handles unknown record type" do
     # Use a model that is neither Location nor Experience
-    record = PlatformAuditLog.create!(
-      action: "create",  # Valid action
-      record_type: "Test",
-      record_id: 1,
-      triggered_by: "test"
-    )
+    # Create a simple object with the required methods
+    klass = Struct.new(:name).new("TestModel")
+    record = Object.new
+    record.define_singleton_method(:class) { klass }
+    record.define_singleton_method(:try) { |method| "Test" }
 
     result = Platform::DSL::Executors::Content.send(:build_description_prompt, record, "informative")
 
-    assert_includes result, "PlatformAuditLog"
+    assert_includes result, "TestModel"
   end
 
   test "build_description_prompt with formal style" do
@@ -740,7 +739,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
     mock_location.define_singleton_method(:save) { false }
     mock_location.define_singleton_method(:errors) {
       mock_errors = Object.new
-      mock_errors.define_singleton_method(:full_messages) { ["Test error"] }
+      mock_errors.define_singleton_method(:full_messages) { [ "Test error" ] }
       mock_errors
     }
 
@@ -787,10 +786,8 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
 
     Platform::DSL::Executors::Content.stub(:find_record_for_mutation, ->(_model, _filters) { mock_record }) do
       Platform::DSL::Executors::TableQuery.stub(:resolve_model, ->(_table) { Location }) do
-        PlatformAuditLog.stub(:log_delete, ->(_record, **_opts) { }) do
-          result = Platform::DSL::Executors::Content.send(:execute_delete, "locations", { id: 123 })
-          assert result[:success]
-        end
+        result = Platform::DSL::Executors::Content.send(:execute_delete, "locations", { id: 123 })
+        assert result[:success]
       end
     end
   end
@@ -862,16 +859,13 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
       data: { name: "Updated Name", nonexistent_field_xyz: "value" }
     }
 
-    # This should work - the nonexistent key should be silently ignored in old_values
-    # but will fail at record.update
-    begin
-      result = Platform::DSL::Executors::Content.execute_mutation(ast)
-      # If it succeeds, verify name was updated
-      @location.reload
-      assert_equal "Updated Name", @location.name
-    rescue Platform::DSL::ExecutionError, ActiveModel::UnknownAttributeError
-      # Expected - unknown attribute error
+    # This should raise an error because nonexistent_field_xyz is not a valid attribute
+    error = assert_raises(Platform::DSL::ExecutionError, ActiveModel::UnknownAttributeError) do
+      Platform::DSL::Executors::Content.execute_mutation(ast)
     end
+
+    # Verify error message mentions the unknown attribute
+    assert_match(/nonexistent_field_xyz|unknown attribute/i, error.message)
   end
 
   test "execute_delete uses discard method when available" do
@@ -902,14 +896,14 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
     mock_experience = Experience.new
     mock_experience.define_singleton_method(:save) { false }
     mock_errors = Object.new
-    mock_errors.define_singleton_method(:full_messages) { ["Validation failed"] }
+    mock_errors.define_singleton_method(:full_messages) { [ "Validation failed" ] }
     mock_experience.define_singleton_method(:errors) { mock_errors }
 
     Experience.stub(:new, ->(_attrs) { mock_experience }) do
       Platform::DSL::Executors::Content.stub(:generate_with_llm, '{"title": "Test", "description": "Test desc", "duration_hours": 2}') do
         error = assert_raises(Platform::DSL::ExecutionError) do
           Platform::DSL::Executors::Content.send(:generate_experience, {
-            location_ids: [location1.id, location2.id]
+            location_ids: [ location1.id, location2.id ]
           })
         end
         assert_match(/Kreiranje iskustva nije uspjelo/, error.message)
@@ -923,7 +917,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
     location1.update_column(:description, nil)
     location2 = Location.create!(name: "With Desc", city: "Mostar", lat: 43.35, lng: 17.82, description: "Has description")
 
-    prompt = Platform::DSL::Executors::Content.send(:build_experience_prompt, [location1, location2])
+    prompt = Platform::DSL::Executors::Content.send(:build_experience_prompt, [ location1, location2 ])
 
     assert_includes prompt, "bez opisa"
     assert_includes prompt, "Has description"
@@ -968,7 +962,7 @@ class Platform::DSL::Executors::ContentTest < ActiveSupport::TestCase
           fields = if mock_record.class.respond_to?(:translatable_fields)
             mock_record.class.translatable_fields
           else
-            [:name, :description].select { |f| mock_record.respond_to?(f) }
+            [ :name, :description ].select { |f| mock_record.respond_to?(f) }
           end
 
           assert_includes fields, :name

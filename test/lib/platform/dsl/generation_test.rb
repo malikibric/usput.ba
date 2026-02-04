@@ -23,7 +23,7 @@ class Platform::DSL::GenerationTest < ActiveSupport::TestCase
 
   # Parser tests
   test "parses generate description command" do
-    ast = Platform::DSL::Parser.parse('generate description for location { id: 123 }')
+    ast = Platform::DSL::Parser.parse("generate description for location { id: 123 }")
 
     assert_equal :generation, ast[:type]
     assert_equal :description, ast[:gen_type]
@@ -51,11 +51,11 @@ class Platform::DSL::GenerationTest < ActiveSupport::TestCase
   end
 
   test "parses generate experience command" do
-    ast = Platform::DSL::Parser.parse('generate experience from locations [1, 2, 3]')
+    ast = Platform::DSL::Parser.parse("generate experience from locations [1, 2, 3]")
 
     assert_equal :generation, ast[:type]
     assert_equal :experience, ast[:gen_type]
-    assert_equal [1, 2, 3], ast[:location_ids]
+    assert_equal [ 1, 2, 3 ], ast[:location_ids]
   end
 
   # Execution tests with mocked LLM
@@ -85,20 +85,6 @@ class Platform::DSL::GenerationTest < ActiveSupport::TestCase
     end
   end
 
-  test "creates audit log for description generation" do
-    mock_response = "Novi opis."
-
-    Platform::DSL::Executors::Content.stub(:generate_with_llm, mock_response) do
-      assert_difference "PlatformAuditLog.count", 1 do
-        Platform::DSL.execute("generate description for location { id: #{@location.id} }")
-      end
-
-      log = PlatformAuditLog.last
-      assert_equal "update", log.action
-      assert_equal "Location", log.record_type
-      assert_equal "platform_dsl_generation", log.triggered_by
-    end
-  end
 
   test "generates translations with mocked LLM" do
     mock_response = "This is the English translation."
@@ -155,24 +141,11 @@ class Platform::DSL::GenerationTest < ActiveSupport::TestCase
     assert_match(/nisu pronađene/i, error.message)
   end
 
-  test "creates audit log for experience generation" do
-    mock_json = '{"title": "Test Tura", "description": "Opis", "duration_hours": 2}'
-
-    Platform::DSL::Executors::Content.stub(:generate_with_llm, mock_json) do
-      assert_difference "PlatformAuditLog.count", 1 do
-        Platform::DSL.execute("generate experience from locations [#{@location.id}, #{@location2.id}]")
-      end
-
-      log = PlatformAuditLog.last
-      assert_equal "create", log.action
-      assert_equal "Experience", log.record_type
-    end
-  end
 
   # Error handling
   test "raises error for non-existent record" do
     error = assert_raises(Platform::DSL::ExecutionError) do
-      Platform::DSL.execute('generate description for location { id: 999999 }')
+      Platform::DSL.execute("generate description for location { id: 999999 }")
     end
 
     assert_match(/nije pronađen/i, error.message)
