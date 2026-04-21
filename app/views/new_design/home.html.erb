@@ -498,208 +498,380 @@
 
     <%# ==================== TRENDING SEKCIJA ==================== %>
     <% if @trending_locations.present? || @trending_experiences.present? %>
-    <div class="bg-gray-50 py-24 sm:py-32 dark:bg-gray-800">
-      <div class="mx-auto max-w-2xl px-6 lg:max-w-7xl lg:px-8">
-        <h2 class="text-base/7 font-semibold text-blue-600 dark:text-yellow-400"><%= t("home.trending.section_title") %></h2>
-        <p class="mt-2 max-w-lg text-4xl font-semibold tracking-tight text-pretty text-gray-950 sm:text-5xl dark:text-white"><%= t("home.trending.section_subtitle") %></p>
-        <div class="mt-10 grid grid-cols-1 gap-4 sm:mt-16 lg:grid-cols-6 lg:grid-rows-2">
-          <% @trending_locations.each_with_index do |location, index| %>
-            <%# Prva lokacija - velika kartica gore lijevo %>
-            <% if index == 0 %>
-              <div class="relative lg:col-span-3 group">
-                <div class="absolute inset-0 rounded-lg bg-white max-lg:rounded-t-4xl lg:rounded-tl-4xl dark:bg-gray-900"></div>
-                <%= link_to location_path(location), class: "relative flex h-full flex-col overflow-hidden rounded-[calc(var(--radius-lg)+1px)] max-lg:rounded-t-[calc(2rem+1px)] lg:rounded-tl-[calc(2rem+1px)]" do %>
-                  <% if location.photos.attached? %>
-                    <%= image_tag rails_blob_path(location.photos.first, only_path: true), alt: location.translate(:name, I18n.locale), class: "h-80 object-cover object-center transition-transform group-hover:scale-105" %>
-                  <% else %>
-                    <div class="h-80 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-yellow-500 dark:to-yellow-600 flex items-center justify-center">
-                      <svg class="w-16 h-16 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                      </svg>
-                    </div>
-                  <% end %>
-                  <div class="p-10 pt-4">
-                    <h3 class="text-sm/4 font-semibold text-blue-600 dark:text-yellow-400">
-                      <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                      </svg>
-                      <%= t("home.trending.location") %>
-                    </h3>
-                    <p class="mt-2 text-lg font-medium tracking-tight text-gray-950 dark:text-white"><%= location.translate(:name, I18n.locale) %></p>
-                    <p class="mt-2 max-w-lg text-sm/6 text-gray-600 dark:text-gray-400 line-clamp-2"><%= truncate(location.translate(:description, I18n.locale).to_s, length: 120) %></p>
-                    <div class="mt-3 flex items-center gap-2">
-                      <% if location.average_rating.to_f > 0 %>
-                        <div class="flex items-center text-yellow-500">
-                          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          <span class="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300"><%= number_with_precision(location.average_rating, precision: 1) %></span>
-                        </div>
-                      <% end %>
-                      <% if location.city.present? %>
-                        <span class="text-sm text-gray-500 dark:text-gray-400"><%= location.city %></span>
-                      <% end %>
-                    </div>
-                  </div>
-                <% end %>
-                <div class="pointer-events-none absolute inset-0 rounded-lg shadow-sm outline outline-black/5 max-lg:rounded-t-4xl lg:rounded-tl-4xl dark:outline-white/15"></div>
-              </div>
+    <section class="trd-section relative py-24 sm:py-32 overflow-hidden">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600;1,700&family=DM+Sans:wght@300;400;500&display=swap');
 
-            <%# Druga lokacija - velika kartica gore desno %>
-            <% elsif index == 1 %>
-              <div class="relative lg:col-span-3 group">
-                <div class="absolute inset-0 rounded-lg bg-white lg:rounded-tr-4xl dark:bg-gray-900"></div>
-                <%= link_to location_path(location), class: "relative flex h-full flex-col overflow-hidden rounded-[calc(var(--radius-lg)+1px)] lg:rounded-tr-[calc(2rem+1px)]" do %>
-                  <% if location.photos.attached? %>
-                    <%= image_tag rails_blob_path(location.photos.first, only_path: true), alt: location.translate(:name, I18n.locale), class: "h-80 object-cover object-center lg:object-right transition-transform group-hover:scale-105" %>
-                  <% else %>
-                    <div class="h-80 bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
-                      <svg class="w-16 h-16 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                      </svg>
-                    </div>
-                  <% end %>
-                  <div class="p-10 pt-4">
-                    <h3 class="text-sm/4 font-semibold text-blue-600 dark:text-yellow-400">
-                      <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                      </svg>
-                      <%= t("home.trending.location") %>
-                    </h3>
-                    <p class="mt-2 text-lg font-medium tracking-tight text-gray-950 dark:text-white"><%= location.translate(:name, I18n.locale) %></p>
-                    <p class="mt-2 max-w-lg text-sm/6 text-gray-600 dark:text-gray-400 line-clamp-2"><%= truncate(location.translate(:description, I18n.locale).to_s, length: 120) %></p>
-                    <div class="mt-3 flex items-center gap-2">
-                      <% if location.average_rating.to_f > 0 %>
-                        <div class="flex items-center text-yellow-500">
-                          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          <span class="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300"><%= number_with_precision(location.average_rating, precision: 1) %></span>
-                        </div>
-                      <% end %>
-                      <% if location.city.present? %>
-                        <span class="text-sm text-gray-500 dark:text-gray-400"><%= location.city %></span>
-                      <% end %>
-                    </div>
-                  </div>
-                <% end %>
-                <div class="pointer-events-none absolute inset-0 rounded-lg shadow-sm outline outline-black/5 lg:rounded-tr-4xl dark:outline-white/15"></div>
-              </div>
+        .trd-section {
+          background-color: #0b1a14;
+        }
 
-            <%# Treća lokacija - mala kartica dolje lijevo %>
-            <% elsif index == 2 %>
-              <div class="relative lg:col-span-2 group">
-                <div class="absolute inset-0 rounded-lg bg-white lg:rounded-bl-4xl dark:bg-gray-900"></div>
-                <%= link_to location_path(location), class: "relative flex h-full flex-col overflow-hidden rounded-[calc(var(--radius-lg)+1px)] lg:rounded-bl-[calc(2rem+1px)]" do %>
-                  <% if location.photos.attached? %>
-                    <%= image_tag rails_blob_path(location.photos.first, only_path: true), alt: location.translate(:name, I18n.locale), class: "h-80 object-cover object-left transition-transform group-hover:scale-105" %>
-                  <% else %>
-                    <div class="h-80 bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                      <svg class="w-16 h-16 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                      </svg>
-                    </div>
-                  <% end %>
-                  <div class="p-10 pt-4">
-                    <h3 class="text-sm/4 font-semibold text-blue-600 dark:text-yellow-400">
-                      <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                      </svg>
-                      <%= t("home.trending.location") %>
-                    </h3>
-                    <p class="mt-2 text-lg font-medium tracking-tight text-gray-950 dark:text-white"><%= location.translate(:name, I18n.locale) %></p>
-                    <p class="mt-2 max-w-lg text-sm/6 text-gray-600 dark:text-gray-400 line-clamp-2"><%= truncate(location.translate(:description, I18n.locale).to_s, length: 80) %></p>
-                    <div class="mt-3 flex items-center gap-2">
-                      <% if location.average_rating.to_f > 0 %>
-                        <div class="flex items-center text-yellow-500">
-                          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          <span class="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300"><%= number_with_precision(location.average_rating, precision: 1) %></span>
-                        </div>
-                      <% end %>
-                      <% if location.city.present? %>
-                        <span class="text-sm text-gray-500 dark:text-gray-400"><%= location.city %></span>
-                      <% end %>
-                    </div>
-                  </div>
-                <% end %>
-                <div class="pointer-events-none absolute inset-0 rounded-lg shadow-sm outline outline-black/5 lg:rounded-bl-4xl dark:outline-white/15"></div>
-              </div>
-            <% end %>
-          <% end %>
+        .trd-section::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image:
+            radial-gradient(ellipse 80% 50% at 10% 0%, rgba(16,185,129,0.08) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 40% at 90% 100%, rgba(5,150,105,0.06) 0%, transparent 60%);
+          pointer-events: none;
+        }
 
-          <%# Experiences - dvije srednje kartice dolje %>
-          <% @trending_experiences.each_with_index do |experience, index| %>
-            <div class="relative lg:col-span-2 group">
-              <div class="absolute inset-0 rounded-lg bg-white dark:bg-gray-900 <%= index == 1 ? 'max-lg:rounded-b-4xl lg:rounded-br-4xl' : '' %>"></div>
-              <%= link_to experience_path(experience), class: "relative flex h-full flex-col overflow-hidden rounded-[calc(var(--radius-lg)+1px)] #{index == 1 ? 'max-lg:rounded-b-[calc(2rem+1px)] lg:rounded-br-[calc(2rem+1px)]' : ''}" do %>
-                <% display_photo = experience.display_cover_photo %>
-                <% if display_photo %>
-                  <%= image_tag rails_blob_path(display_photo, only_path: true), alt: experience.translate(:title, I18n.locale), class: "h-80 object-cover transition-transform group-hover:scale-105" %>
+        .trd-headline {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-style: italic;
+          font-weight: 700;
+          line-height: 0.9;
+          letter-spacing: -0.02em;
+          color: #fff;
+        }
+
+        .trd-label {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.7rem;
+          font-weight: 500;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: #34d399;
+        }
+
+        .trd-card {
+          position: relative;
+          display: block;
+          border-radius: 14px;
+          overflow: hidden;
+          text-decoration: none;
+          transition: transform 0.45s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.45s ease;
+        }
+
+        .trd-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+        }
+
+        .trd-card-img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.65s cubic-bezier(0.25,0.46,0.45,0.94);
+        }
+
+        .trd-card:hover .trd-card-img {
+          transform: scale(1.07);
+        }
+
+        .trd-card-placeholder {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, #1a3a28 0%, #0d2318 100%);
+        }
+
+        .trd-card-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            to top,
+            rgba(0,0,0,0.88) 0%,
+            rgba(0,0,0,0.35) 45%,
+            rgba(0,0,0,0.08) 100%
+          );
+          transition: opacity 0.4s ease;
+        }
+
+        .trd-card:hover .trd-card-overlay {
+          opacity: 0.92;
+        }
+
+        .trd-card-rank {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-style: italic;
+          position: absolute;
+          top: 14px;
+          left: 18px;
+          font-size: 5rem;
+          font-weight: 700;
+          line-height: 1;
+          color: rgba(255,255,255,0.10);
+          pointer-events: none;
+          letter-spacing: -0.04em;
+          transition: color 0.4s ease;
+          user-select: none;
+        }
+
+        .trd-card:hover .trd-card-rank {
+          color: rgba(255,255,255,0.16);
+        }
+
+        .trd-card-badge {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          border-radius: 100px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.6rem;
+          font-weight: 500;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.9);
+          background: rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.18);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+
+        .trd-card-body {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding: 1.4rem 1.5rem;
+          transform: translateY(0);
+          transition: transform 0.45s cubic-bezier(0.25,0.46,0.45,0.94);
+        }
+
+        .trd-card:hover .trd-card-body {
+          transform: translateY(-5px);
+        }
+
+        .trd-card-name {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-weight: 600;
+          color: #fff;
+          line-height: 1.15;
+          letter-spacing: -0.01em;
+        }
+
+        .trd-card-desc {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.78rem;
+          color: rgba(255,255,255,0.55);
+          line-height: 1.5;
+          margin-top: 5px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .trd-card-meta {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 9px;
+        }
+
+        .trd-card-rating {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          color: #fbbf24;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.72rem;
+          font-weight: 500;
+        }
+
+        .trd-card-city {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.72rem;
+          color: rgba(255,255,255,0.4);
+        }
+
+        .trd-card-city::before {
+          content: '·';
+          margin-right: 6px;
+          color: rgba(255,255,255,0.2);
+        }
+
+        .trd-empty {
+          border-radius: 14px;
+          background: rgba(255,255,255,0.025);
+          border: 1px dashed rgba(255,255,255,0.07);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 2rem;
+        }
+
+        .trd-empty-label {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.65rem;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.2);
+          margin-bottom: 10px;
+        }
+
+        .trd-empty-title {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-style: italic;
+          font-size: 1.1rem;
+          color: rgba(255,255,255,0.2);
+        }
+
+        /* Staggered entrance */
+        @keyframes trdFadeUp {
+          from { opacity: 0; transform: translateY(22px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .trd-animate {
+          opacity: 0;
+          animation: trdFadeUp 0.65s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+        }
+        .trd-d0 { animation-delay: 0.05s; }
+        .trd-d1 { animation-delay: 0.15s; }
+        .trd-d2 { animation-delay: 0.22s; }
+        .trd-d3 { animation-delay: 0.30s; }
+        .trd-d4 { animation-delay: 0.37s; }
+        .trd-d5 { animation-delay: 0.44s; }
+
+        /* Grid items fill their cell */
+        .trd-section .trd-animate {
+          height: 100%;
+        }
+
+        /* Thin emerald divider */
+        .trd-rule {
+          width: 36px;
+          height: 2px;
+          background: #10b981;
+          margin-bottom: 14px;
+        }
+
+        /* Hero card larger name */
+        .trd-hero .trd-card-name {
+          font-size: 1.55rem;
+        }
+        .trd-hero .trd-card-rank {
+          font-size: 6.5rem;
+          top: 10px;
+        }
+        .trd-hero .trd-card-desc {
+          -webkit-line-clamp: 3;
+        }
+
+        /* Non-hero name */
+        .trd-card-name { font-size: 1.1rem; }
+      </style>
+
+      <div class="relative mx-auto max-w-7xl px-6 lg:px-8">
+
+        <%# Header row %>
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between mb-12 trd-animate trd-d0">
+          <div>
+            <div class="trd-rule"></div>
+            <p class="trd-label mb-4"><%= t("home.trending.section_title") %></p>
+            <h2 class="trd-headline text-5xl sm:text-6xl lg:text-7xl">
+              <%= t("home.trending.section_subtitle") %>
+            </h2>
+          </div>
+          <p class="mt-5 lg:mt-0 lg:max-w-xs" style="font-family:'DM Sans',sans-serif; font-size:0.82rem; color:rgba(255,255,255,0.38); line-height:1.7;">
+            <%= t("home.trending.follow_us") %>
+          </p>
+        </div>
+
+        <%# Merge all items: locations first, then experiences %>
+        <% trd_items = @trending_locations.map { |l| [:location, l] } + @trending_experiences.map { |e| [:experience, e] } %>
+
+        <%# Grid: hero (col-span-5, row-span-2) + 2×2 on right %>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3" style="grid-auto-rows: 288px;">
+
+          <% trd_items.each_with_index do |(type, item), idx| %>
+            <%
+              col_cls = case idx
+                when 0 then "lg:col-span-5 lg:row-span-2"
+                when 1 then "lg:col-span-4"
+                when 2 then "lg:col-span-3"
+                when 3 then "lg:col-span-4"
+                when 4 then "lg:col-span-3"
+                else       "lg:col-span-4"
+              end
+              delay_cls = "trd-d#{[idx + 1, 5].min}"
+              hero_cls  = idx == 0 ? "trd-hero" : ""
+              rank      = format("%02d", idx + 1)
+              path      = type == :location ? location_path(item) : experience_path(item)
+              name      = type == :location ? item.translate(:name, I18n.locale) : item.translate(:title, I18n.locale)
+              desc      = (type == :location ? item.translate(:description, I18n.locale) : item.translate(:description, I18n.locale)).to_s
+              photo_url = if type == :location
+                item.photos.attached? ? rails_blob_path(item.photos.first, only_path: true) : nil
+              else
+                item.display_cover_photo ? rails_blob_path(item.display_cover_photo, only_path: true) : nil
+              end
+              rating    = item.average_rating.to_f
+              meta      = type == :location ? item.city : item.try(:formatted_duration)
+            %>
+
+            <div class="<%= col_cls %> trd-animate <%= delay_cls %>">
+              <%= link_to path, class: "trd-card #{hero_cls} block w-full h-full" do %>
+                <% if photo_url %>
+                  <%= image_tag photo_url, alt: name, class: "trd-card-img" %>
                 <% else %>
-                  <div class="h-80 bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                    <svg class="w-16 h-16 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
-                    </svg>
-                  </div>
+                  <div class="trd-card-placeholder"></div>
                 <% end %>
-                <div class="p-10 pt-4">
-                  <h3 class="text-sm/4 font-semibold text-blue-600 dark:text-yellow-400">
-                    <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
-                    </svg>
-                    <%= t("home.trending.experience") %>
-                  </h3>
-                  <p class="mt-2 text-lg font-medium tracking-tight text-gray-950 dark:text-white"><%= experience.translate(:title, I18n.locale) %></p>
-                  <p class="mt-2 max-w-lg text-sm/6 text-gray-600 dark:text-gray-400 line-clamp-2"><%= truncate(experience.translate(:description, I18n.locale).to_s, length: 80) %></p>
-                  <div class="mt-3 flex items-center gap-2">
-                    <% if experience.average_rating.to_f > 0 %>
-                      <div class="flex items-center text-yellow-500">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <span class="ml-1 text-sm font-medium text-gray-700 dark:text-gray-300"><%= number_with_precision(experience.average_rating, precision: 1) %></span>
-                      </div>
+
+                <div class="trd-card-overlay"></div>
+                <span class="trd-card-rank"><%= rank %></span>
+
+                <span class="trd-card-badge">
+                  <% if type == :location %>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <% else %>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  <% end %>
+                  <%= type == :location ? t("home.trending.location") : t("home.trending.experience") %>
+                </span>
+
+                <div class="trd-card-body">
+                  <p class="trd-card-name"><%= name %></p>
+                  <p class="trd-card-desc"><%= truncate(desc, length: idx == 0 ? 130 : 75) %></p>
+                  <div class="trd-card-meta">
+                    <% if rating > 0 %>
+                      <span class="trd-card-rating">
+                        <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        <%= number_with_precision(rating, precision: 1) %>
+                      </span>
                     <% end %>
-                    <% if experience.formatted_duration.present? %>
-                      <span class="text-sm text-gray-500 dark:text-gray-400"><%= experience.formatted_duration %></span>
+                    <% if meta.present? %>
+                      <span class="trd-card-city"><%= meta %></span>
                     <% end %>
                   </div>
                 </div>
               <% end %>
-              <div class="pointer-events-none absolute inset-0 rounded-lg shadow-sm outline outline-black/5 dark:outline-white/15 <%= index == 1 ? 'max-lg:rounded-b-4xl lg:rounded-br-4xl' : '' %>"></div>
             </div>
           <% end %>
 
-          <%# Ako nema dovoljno lokacija ili experiences, popuni prazne kartice %>
-          <% empty_slots = 5 - (@trending_locations.size + @trending_experiences.size) %>
-          <% if empty_slots > 0 %>
-            <% empty_slots.times do |i| %>
-              <div class="relative lg:col-span-2">
-                <div class="absolute inset-0 rounded-lg bg-white dark:bg-gray-900 <%= i == empty_slots - 1 ? 'max-lg:rounded-b-4xl lg:rounded-br-4xl' : '' %>"></div>
-                <div class="relative flex h-full flex-col overflow-hidden rounded-[calc(var(--radius-lg)+1px)] <%= i == empty_slots - 1 ? 'max-lg:rounded-b-[calc(2rem+1px)] lg:rounded-br-[calc(2rem+1px)]' : '' %>">
-                  <div class="h-80 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
-                    <svg class="w-16 h-16 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                  </div>
-                  <div class="p-10 pt-4">
-                    <h3 class="text-sm/4 font-semibold text-gray-400 dark:text-gray-500"><%= t("home.trending.coming_soon") %></h3>
-                    <p class="mt-2 text-lg font-medium tracking-tight text-gray-500 dark:text-gray-400"><%= t("home.trending.new_experience") %></p>
-                    <p class="mt-2 max-w-lg text-sm/6 text-gray-400 dark:text-gray-500"><%= t("home.trending.follow_us") %></p>
-                  </div>
-                </div>
-                <div class="pointer-events-none absolute inset-0 rounded-lg shadow-sm outline outline-black/5 dark:outline-white/15 <%= i == empty_slots - 1 ? 'max-lg:rounded-b-4xl lg:rounded-br-4xl' : '' %>"></div>
+          <%# Empty placeholder slots %>
+          <% trd_empty = 5 - trd_items.size %>
+          <% if trd_empty > 0 %>
+            <% trd_empty.times do |i| %>
+              <%
+                ei = trd_items.size + i
+                empty_col = case ei
+                  when 0 then "lg:col-span-5 lg:row-span-2"
+                  when 1 then "lg:col-span-4"
+                  when 2 then "lg:col-span-3"
+                  when 3 then "lg:col-span-4"
+                  when 4 then "lg:col-span-3"
+                  else       "lg:col-span-4"
+                end
+              %>
+              <div class="<%= empty_col %> trd-empty trd-animate trd-d<%= [ei + 1, 5].min %>">
+                <p class="trd-empty-label"><%= t("home.trending.coming_soon") %></p>
+                <p class="trd-empty-title"><%= t("home.trending.new_experience") %></p>
               </div>
             <% end %>
           <% end %>
+
         </div>
       </div>
-    </div>
+    </section>
     <% end %>
 
     <%# ==================== CTA SEKCIJA ==================== %>
